@@ -1,0 +1,46 @@
+{
+  "usuarios": [
+    {
+      "id": "user-1791604878478-928",
+      "nome": "joao paulo jancanti",
+      "email": "jotapaulo26@gmail.com",
+      "senhaHash": "bad2cb09497b1b1c7301c2a74e6cdd4eb90cb21bdd029111d11eed044dd0b494",
+      "lojaId": "loja-1791604878478-40",
+      "nomeLoja": "MR Doces",
+      "criadoEm": "2026-10-10T04:01:18.478Z"
+    }
+  ],
+  "sessoes": [
+    {
+      "token": "bd8f4ec6cab46693fb4734db1737212c678f26e6c66a5f691876e38cf4579923",
+      "usuarioId": "user-1791604878478-928",
+      "lojaId": "loja-1791604878478-40",
+      "criadoEm": "2026-10-10T04:03:29.603Z"
+    }
+  ],
+  "lojas": {
+    "loja-1791604878478-40": {
+      "id": "loja-1791604878478-40",
+      "nomeLoja": "MR Doces",
+      "criadoEm": "2026-10-10T04:01:18.478Z",
+      "categorias": [],
+      "insumos": [],
+      "produtos": [],
+      "clientes": [],
+      "pedidos": [],
+      "pagamentosCrediario": [],
+      "configuracaoLoja": {
+        "nomeLoja": "MR Doces",
+        "chavePix": "16993177138",
+        "tipoChavePix": "CELULAR",
+        "titularPix": "joao paulo jancanti",
+        "cidadePix": "Novo horizonte",
+        "mensagemRodape": "Agradecemos a sua preferência! Volte sempre.",
+        "cnpjCpf": "47002458833",
+        "telefone": "16993177138",
+        "endereco": "Rua Vereador Hlio Fonseca Residencial Jardim das Paineiras 332",
+        "cidade": "NH - Sp"
+      }
+    }
+  }
+}

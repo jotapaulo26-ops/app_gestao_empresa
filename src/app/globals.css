@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 245, 245, 245;
+  --background-rgb: 0, 0, 0;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: #000000;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* Neon glow utility classes */
+.neon-border {
+  border-color: rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
+}
+
+.neon-border-active {
+  border-color: #22c55e;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.35);
+}
+
+.neon-text-glow {
+  text-shadow: 0 0 12px rgba(34, 197, 94, 0.6);
+}
+
+/* Scrollbar dark */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #22c55e;
+}
+
+/* Ocultar barra de rolagem em carrosséis e listas */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Estilos de Impressão de Cupom Térmico (imprime fundo branco e texto preto) */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+    color: black !important;
+    background: white !important;
+  }
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+    padding: 10px !important;
+    font-size: 12px !important;
+  }
+}
