@@ -18,6 +18,11 @@ import {
 } from 'lucide-react';
 import CobrancaPdfModal from './CobrancaPdfModal';
 import { apiFetch } from '@/lib/api';
+import {
+  salvarClienteLocalEOnline,
+  removerClienteLocalEOnline,
+  amortizarCrediarioLocalEOnline,
+} from '@/lib/dataService';
 
 interface CrediarioViewProps {
   clientes: Cliente[];
@@ -109,14 +114,7 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
         saldoDevedor: editingCliente ? editingCliente.saldoDevedor : 0,
       };
 
-      const res = await apiFetch('/api/clientes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao salvar cliente');
+      await salvarClienteLocalEOnline(payload);
 
       setModalOpen(false);
       onRefresh();
@@ -133,11 +131,7 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
     setErrorMsg('');
 
     try {
-      const res = await apiFetch(`/api/clientes?id=${clienteParaExcluir.id}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao excluir');
+      await removerClienteLocalEOnline(clienteParaExcluir.id);
 
       setDeleteModalOpen(false);
       setClienteParaExcluir(null);
@@ -161,25 +155,17 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
     setErrorMsg('');
 
     try {
-      const res = await apiFetch('/api/crediario/amortizar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clienteId: clienteAmortizar.id,
-          valor: valorAmortizar,
-          formaPagamento: formaPagamentoAmortizar,
-          observacao: obsAmortizar,
-        }),
+      await amortizarCrediarioLocalEOnline({
+        clienteId: clienteAmortizar.id,
+        valor: valorAmortizar,
+        formaPagamento: formaPagamentoAmortizar,
+        observacao: obsAmortizar,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao processar');
 
       setAmortizarModalOpen(false);
-      setReciboAmortizacao({
-        cliente: data.cliente,
-        pagamento: data.pagamento,
-      });
+      setClienteAmortizar(null);
+      setValorAmortizar(0);
+      setObsAmortizar('');
       onRefresh();
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao amortizar');

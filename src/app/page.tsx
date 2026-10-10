@@ -12,6 +12,8 @@ import CategoriasView from '@/components/CategoriasView';
 import LojaConfigView from '@/components/LojaConfigView';
 import AuthView from '@/components/AuthView';
 import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
+import { obterItensLocais, salvarItensLocais } from '@/lib/indexedDb';
+import { syncService } from '@/lib/syncService';
 
 interface SessaoState {
   usuario: {
@@ -41,14 +43,38 @@ export default function HomePage() {
 
   const [loading, setLoading] = useState(true);
 
-  // Carrega os dados da loja conectada
+  // Carrega os dados da loja conectada (Local-First: Celular Primeiro, Nuvem em Segundo Plano)
   const loadAllData = useCallback(async (lojaIdAlvo?: string, tokenAlvo?: string) => {
     const lId = lojaIdAlvo || sessao?.lojaId || (typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_loja_id') : null);
     const tok = tokenAlvo || sessao?.token || (typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_token') : null);
 
     if (!lId) return;
 
-    setLoading(true);
+    // 1. CARREGAMENTO INSTANTÂNEO DO BANCO LOCAL DO CELULAR (0ms)
+    try {
+      const [localCat, localIns, localProd, localCli, localPed] = await Promise.all([
+        obterItensLocais<Categoria>('categorias'),
+        obterItensLocais<Insumo>('insumos'),
+        obterItensLocais<Produto>('produtos'),
+        obterItensLocais<Cliente>('clientes'),
+        obterItensLocais<Pedido>('pedidos'),
+      ]);
+
+      if (localCat.length > 0) setCategorias(localCat);
+      if (localIns.length > 0) setInsumos(localIns);
+      if (localProd.length > 0) setProdutos(localProd);
+      if (localCli.length > 0) setClientes(localCli);
+      if (localPed.length > 0) setPedidos(localPed);
+
+      // Se já temos produtos ou categorias no celular, libera a interface na hora
+      if (localProd.length > 0 || localCat.length > 0) {
+        setLoading(false);
+      }
+    } catch (errLocal) {
+      console.warn('Leitura local falhou:', errLocal);
+    }
+
+    // 2. SINCRONIZAÇÃO COM A NUVEM EM SEGUNDO PLANO
     const headers: Record<string, string> = {
       'x-loja-id': lId,
     };
@@ -58,24 +84,87 @@ export default function HomePage() {
 
     try {
       const [resCat, resIns, resProd, resCli, resPed, resDash, resCfg] = await Promise.all([
-        fetch('/api/categorias', { headers }).then((r) => r.json()),
-        fetch('/api/insumos', { headers }).then((r) => r.json()),
-        fetch('/api/produtos', { headers }).then((r) => r.json()),
-        fetch('/api/clientes', { headers }).then((r) => r.json()),
-        fetch('/api/pedidos', { headers }).then((r) => r.json()),
-        fetch('/api/dashboard', { headers }).then((r) => r.json()),
-        fetch('/api/configuracoes', { headers }).then((r) => r.json()),
+        fetch('/api/categorias', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/insumos', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/produtos', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/clientes', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/pedidos', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/dashboard', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/configuracoes', { headers }).then((r) => r.json()).catch(() => null),
       ]);
 
-      setCategorias(Array.isArray(resCat) ? resCat : []);
-      setInsumos(Array.isArray(resIns) ? resIns : []);
-      setProdutos(Array.isArray(resProd) ? resProd : []);
-      setClientes(Array.isArray(resCli) ? resCli : []);
-      setPedidos(Array.isArray(resPed) ? resPed : []);
-      setDashboardMetrics(resDash && !resDash.error ? resDash : null);
-      setConfigLoja(resCfg && !resCfg.error ? resCfg : null);
+      // Categorias
+      if (Array.isArray(resCat)) {
+        setCategorias((prev) => {
+          const mapa = new Map(prev.map((c) => [c.id, c]));
+          for (const c of resCat) {
+            if (!mapa.has(c.id)) mapa.set(c.id, c);
+          }
+          const unificados = Array.from(mapa.values());
+          salvarItensLocais('categorias', unificados);
+          return unificados;
+        });
+      }
+
+      // Insumos
+      if (Array.isArray(resIns)) {
+        setInsumos((prev) => {
+          const mapa = new Map(prev.map((i) => [i.id, i]));
+          for (const ins of resIns) {
+            if (!mapa.has(ins.id)) mapa.set(ins.id, ins);
+          }
+          const unificados = Array.from(mapa.values());
+          salvarItensLocais('insumos', unificados);
+          return unificados;
+        });
+      }
+
+      // Produtos
+      if (Array.isArray(resProd)) {
+        setProdutos((prev) => {
+          const mapa = new Map(prev.map((p) => [p.id, p]));
+          for (const prod of resProd) {
+            if (!mapa.has(prod.id)) mapa.set(prod.id, prod);
+          }
+          const unificados = Array.from(mapa.values());
+          salvarItensLocais('produtos', unificados);
+          return unificados;
+        });
+      }
+
+      // Clientes
+      if (Array.isArray(resCli)) {
+        setClientes((prev) => {
+          const mapa = new Map(prev.map((c) => [c.id, c]));
+          for (const cli of resCli) {
+            if (!mapa.has(cli.id)) mapa.set(cli.id, cli);
+          }
+          const unificados = Array.from(mapa.values());
+          salvarItensLocais('clientes', unificados);
+          return unificados;
+        });
+      }
+
+      // Pedidos
+      if (Array.isArray(resPed)) {
+        setPedidos((prev) => {
+          const mapa = new Map(prev.map((p) => [p.id, p]));
+          for (const ped of resPed) {
+            if (!mapa.has(ped.id)) mapa.set(ped.id, ped);
+          }
+          const unificados = Array.from(mapa.values());
+          salvarItensLocais('pedidos', unificados);
+          return unificados;
+        });
+      }
+
+      if (resDash && !resDash.error) setDashboardMetrics(resDash);
+      if (resCfg && !resCfg.error) setConfigLoja(resCfg);
+
+      // Dispara o background sync para enviar qualquer pendência do celular
+      syncService.processarFila();
     } catch (err) {
-      console.error('Erro ao carregar dados da loja:', err);
+      console.warn('Modo offline ativo: usando dados salvos no celular.', err);
     } finally {
       setLoading(false);
     }

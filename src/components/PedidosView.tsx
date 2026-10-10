@@ -5,6 +5,7 @@ import { Pedido, Cliente, ConfiguracaoLoja } from '@/types';
 import { Receipt, Search, Printer, Ban, X, AlertTriangle, FileText, QrCode } from 'lucide-react';
 import CobrancaPdfModal from './CobrancaPdfModal';
 import { apiFetch } from '@/lib/api';
+import { cancelarPedidoLocalEOnline } from '@/lib/dataService';
 
 interface PedidosViewProps {
   pedidos: Pedido[];
@@ -41,11 +42,7 @@ export default function PedidosView({ pedidos, clientes, config, onRefresh }: Pe
     setErrorMsg('');
 
     try {
-      const res = await apiFetch(`/api/pedidos/${pedidoParaCancelar.id}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao cancelar');
+      await cancelarPedidoLocalEOnline(pedidoParaCancelar.id);
 
       setCancelModalOpen(false);
       setPedidoParaCancelar(null);

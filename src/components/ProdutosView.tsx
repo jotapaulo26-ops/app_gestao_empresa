@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Produto, Categoria, Insumo, TipoProduto, ItemFichaTecnica } from '@/types';
 import { apiFetch } from '@/lib/api';
+import { salvarProdutoLocalEOnline, removerProdutoLocalEOnline } from '@/lib/dataService';
 import {
   Utensils,
   Plus,
@@ -191,14 +192,7 @@ export default function ProdutosView({
         fichaTecnica: tipo === 'FABRICADO' ? fichaTecnica : [],
       };
 
-      const res = await apiFetch('/api/produtos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao salvar produto');
+      await salvarProdutoLocalEOnline(payload);
 
       setModalOpen(false);
       onRefresh();
@@ -214,11 +208,7 @@ export default function ProdutosView({
     setLoading(true);
 
     try {
-      const res = await apiFetch(`/api/produtos?id=${produtoParaExcluir.id}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao excluir');
+      await removerProdutoLocalEOnline(produtoParaExcluir.id);
 
       setDeleteModalOpen(false);
       setProdutoParaExcluir(null);

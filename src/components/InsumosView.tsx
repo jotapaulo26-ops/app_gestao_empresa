@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { salvarInsumoLocalEOnline, removerInsumoLocalEOnline } from '@/lib/dataService';
 
 interface InsumosViewProps {
   insumos: Insumo[];
@@ -87,14 +88,7 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
         id: editingInsumo ? editingInsumo.id : undefined,
       };
 
-      const res = await apiFetch('/api/insumos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
+      await salvarInsumoLocalEOnline(payload);
 
       setModalOpen(false);
       onRefresh();
@@ -112,17 +106,10 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
 
     try {
       const novoEstoque = Number((insumoEntrada.estoqueAtual + quantidadeEntrada).toFixed(3));
-      const res = await apiFetch('/api/insumos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...insumoEntrada,
-          estoqueAtual: novoEstoque,
-        }),
+      await salvarInsumoLocalEOnline({
+        ...insumoEntrada,
+        estoqueAtual: novoEstoque,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao atualizar');
 
       setEntradaModalOpen(false);
       setInsumoEntrada(null);
@@ -139,11 +126,7 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
     setLoading(true);
 
     try {
-      const res = await apiFetch(`/api/insumos?id=${insumoParaExcluir.id}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao excluir');
+      await removerInsumoLocalEOnline(insumoParaExcluir.id);
 
       setDeleteModalOpen(false);
       setInsumoParaExcluir(null);

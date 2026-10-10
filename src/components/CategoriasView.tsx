@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Categoria, Produto } from '@/types';
 import { Tags, Plus, Edit2, Trash2, X, AlertTriangle, Layers } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { salvarCategoriaLocalEOnline, removerCategoriaLocalEOnline } from '@/lib/dataService';
 
 interface CategoriasViewProps {
   categorias: Categoria[];
@@ -47,14 +48,7 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
         nome,
       };
 
-      const res = await apiFetch('/api/categorias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
+      await salvarCategoriaLocalEOnline(payload);
 
       setModalOpen(false);
       onRefresh();
@@ -70,11 +64,7 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
     setLoading(true);
 
     try {
-      const res = await apiFetch(`/api/categorias?id=${categoriaParaExcluir.id}${cascade ? '&cascade=true' : ''}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao excluir');
+      await removerCategoriaLocalEOnline(categoriaParaExcluir.id, cascade);
 
       setDeleteModalOpen(false);
       setCategoriaParaExcluir(null);

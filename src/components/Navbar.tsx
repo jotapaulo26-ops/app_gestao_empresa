@@ -17,6 +17,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import InstallPwaButton from './InstallPwaButton';
+import SyncStatusBadge from './SyncStatusBadge';
 
 export type ActiveTab = 'dashboard' | 'pdv' | 'pedidos' | 'crediario' | 'produtos' | 'insumos' | 'categorias' | 'loja';
 
@@ -78,6 +79,8 @@ export default function Navbar({
         </div>
 
         <div className="flex items-center gap-2">
+          <SyncStatusBadge />
+
           {alertasEstoque > 0 && (
             <button
               onClick={() => handleSelectTab('insumos')}

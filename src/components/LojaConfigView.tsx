@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { salvarConfigLocalEOnline } from '@/lib/dataService';
 
 interface LojaConfigViewProps {
   config?: ConfiguracaoLoja;
@@ -51,14 +52,7 @@ export default function LojaConfigView({ config, onRefresh }: LojaConfigViewProp
     setErrorMsg('');
 
     try {
-      const res = await apiFetch('/api/configuracoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
+      await salvarConfigLocalEOnline(formData);
 
       setSuccessMsg('Configurações salvas com sucesso! As notas e faturas já estão atualizadas.');
       onRefresh();
