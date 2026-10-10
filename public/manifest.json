@@ -1,0 +1,9 @@
+{
+  "name": "ERP & PDV Manu",
+  "short_name": "PDV Manu",
+  "description": "Sistema de Gestão Comercial e PDV Integrado",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#00ff88"
+}
