@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
 import {
   DatabaseSchema,
@@ -15,7 +16,10 @@ import {
   ConfiguracaoLoja,
 } from '@/types';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+// Em ambientes serverless (Vercel / AWS Lambda), o diretório /var/task é Read-Only.
+// Usamos o diretório temporário do SO (os.tmpdir() -> /tmp) e cache em memória seguro.
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DATA_DIR = isServerless ? os.tmpdir() : path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 const INITIAL_SCHEMA: DatabaseSchema = {
@@ -24,38 +28,52 @@ const INITIAL_SCHEMA: DatabaseSchema = {
   lojas: {},
 };
 
-function ensureDb(): DatabaseSchema {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+let memoryDb: DatabaseSchema | null = null;
 
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_SCHEMA, null, 2), 'utf-8');
-    return INITIAL_SCHEMA;
+function ensureDb(): DatabaseSchema {
+  if (memoryDb) {
+    return memoryDb;
   }
 
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    // Se o banco estava no formato antigo (tinha array categorias na raiz), migra para o formato limpo multi-tenant
-    if (!parsed.lojas || !Array.isArray(parsed.usuarios)) {
-      fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_SCHEMA, null, 2), 'utf-8');
-      return INITIAL_SCHEMA;
+    if (!fs.existsSync(DATA_DIR)) {
+      try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      } catch {}
     }
-    return parsed;
+
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed.lojas && Array.isArray(parsed.usuarios)) {
+        memoryDb = parsed;
+        return parsed;
+      }
+    }
+
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_SCHEMA, null, 2), 'utf-8');
+    } catch {}
+
+    memoryDb = JSON.parse(JSON.stringify(INITIAL_SCHEMA));
+    return memoryDb!;
   } catch {
-    fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_SCHEMA, null, 2), 'utf-8');
-    return INITIAL_SCHEMA;
+    memoryDb = JSON.parse(JSON.stringify(INITIAL_SCHEMA));
+    return memoryDb!;
   }
 }
 
 function saveDb(data: DatabaseSchema): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  memoryDb = data;
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    // Se o sistema de arquivos bloquear, o memoryDb garante a persistência em tempo de execução
+    console.warn('Ambiente com escrita protegida. Dados preservados na memória do servidor:', err);
   }
-  const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
-  fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-  fs.renameSync(tempFile, DB_FILE);
 }
 
 // =================== RESOLUÇÃO E GESTÃO DE LOJAS ===================

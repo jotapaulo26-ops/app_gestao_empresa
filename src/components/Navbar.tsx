@@ -16,6 +16,7 @@ import {
   ChevronUp,
   LogOut,
 } from 'lucide-react';
+import InstallPwaButton from './InstallPwaButton';
 
 export type ActiveTab = 'dashboard' | 'pdv' | 'pedidos' | 'crediario' | 'produtos' | 'insumos' | 'categorias' | 'loja';
 
@@ -280,8 +281,10 @@ export default function Navbar({
               </button>
             </div>
 
-            {onLogout && (
-              <div className="pt-3 border-t border-zinc-900">
+            <div className="pt-3 border-t border-zinc-900 space-y-2">
+              <InstallPwaButton />
+
+              {onLogout && (
                 <button
                   onClick={() => {
                     setDrawerOpen(false);
@@ -292,8 +295,8 @@ export default function Navbar({
                   <LogOut className="w-4 h-4" />
                   <span>Sair da Conta ({nomeUsuario || 'Operador'})</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

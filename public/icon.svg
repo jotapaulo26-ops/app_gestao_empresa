@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00ff88" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Fundo Preto OLED -->
+  <rect width="512" height="512" rx="110" fill="#000000"/>
+  <circle cx="256" cy="256" r="230" fill="url(#glow)"/>
+  <rect x="16" y="16" width="480" height="480" rx="98" fill="none" stroke="#00ff88" stroke-width="8" stroke-opacity="0.6"/>
+
+  <!-- Ícone Neon PDV / Loja -->
+  <g filter="url(#neon-glow)" transform="translate(64, 64) scale(0.75)">
+    <!-- Carrinho / Cesta estilizada com raio/neon -->
+    <path d="M80 120 L432 120 L380 340 L132 340 Z" fill="none" stroke="#00ff88" stroke-width="28" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- Alça -->
+    <path d="M160 120 C160 40, 352 40, 352 120" fill="none" stroke="#00f0ff" stroke-width="24" stroke-linecap="round"/>
+    <!-- Rodas -->
+    <circle cx="160" cy="400" r="30" fill="#00ff88"/>
+    <circle cx="352" cy="400" r="30" fill="#00ff88"/>
+    <!-- Brilho no centro -->
+    <polygon points="256,170 286,230 352,240 304,286 316,350 256,318 196,350 208,286 160,240 226,230" fill="#00ff88"/>
+  </g>
+</svg>

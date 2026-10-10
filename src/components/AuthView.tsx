@@ -14,6 +14,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import InstallPwaButton from './InstallPwaButton';
 
 interface AuthViewProps {
   onLoginSuccess: (dados: {
@@ -155,6 +156,9 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
         {/* Glow de fundo */}
         <div className="absolute -top-16 -right-16 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Botão de Instalar como Aplicativo PWA */}
+        <InstallPwaButton />
 
         {/* Abas Alternadoras (Login / Cadastro) */}
         <div className="grid grid-cols-2 p-1 bg-zinc-900 rounded-2xl mb-6 border border-zinc-800">
