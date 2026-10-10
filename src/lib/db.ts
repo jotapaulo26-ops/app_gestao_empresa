@@ -98,7 +98,7 @@ export function getLoja(lojaId?: string): DadosLoja {
     id: fallbackId,
     nomeLoja: 'Minha Loja',
     criadoEm: new Date().toISOString(),
-    categorias: [],
+    categorias: [{ id: 'cat-geral', nome: 'Geral' }],
     insumos: [],
     produtos: [],
     clientes: [],
@@ -157,12 +157,13 @@ export function cadastrarUsuario(params: {
   const lojaId = `loja-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const usuarioId = `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-  // Cria a loja 100% limpa e personalizada
+  // Cria a loja 100% limpa e personalizada com categoria Geral padrão
+  const catPadrao: Categoria = { id: `cat-geral-${Date.now()}`, nome: 'Geral' };
   const novaLoja: DadosLoja = {
     id: lojaId,
     nomeLoja: params.nomeLoja.trim(),
     criadoEm: new Date().toISOString(),
-    categorias: [],
+    categorias: [catPadrao],
     insumos: [],
     produtos: [],
     clientes: [],
@@ -422,7 +423,14 @@ export function saveProduto(produto: Produto, lojaId?: string): Produto {
   const db = ensureDb();
   const loja = getLoja(lojaId);
 
-  if (produto.tipo === 'FABRICADO' && produto.fichaTecnica) {
+  if (!produto.categoriaId) {
+    if (!loja.categorias || loja.categorias.length === 0) {
+      loja.categorias = [{ id: `cat-geral-${Date.now()}`, nome: 'Geral' }];
+    }
+    produto.categoriaId = loja.categorias[0].id;
+  }
+
+  if (produto.tipo === 'FABRICADO' && produto.fichaTecnica && produto.fichaTecnica.length > 0) {
     const { custoInsumos, custoTotal } = calculateRecipeCost(
       loja.insumos,
       produto.fichaTecnica,
@@ -431,8 +439,12 @@ export function saveProduto(produto: Produto, lojaId?: string): Produto {
     );
     produto.custoInsumos = custoInsumos;
     produto.custoTotal = custoTotal;
+    if (!produto.precoVenda || produto.precoVenda === 0) {
+      produto.precoVenda = Number((custoTotal * (1 + (produto.margemLucroPct || 0) / 100)).toFixed(2));
+    }
   } else {
-    produto.custoTotal = produto.custoInsumos || 0;
+    // Produto de Revenda ou sem ficha técnica (preço direto)
+    produto.custoTotal = produto.custoTotal || produto.custoInsumos || 0;
   }
 
   const index = loja.produtos.findIndex((p) => p.id === produto.id);

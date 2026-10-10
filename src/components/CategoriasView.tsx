@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Categoria, Produto } from '@/types';
 import { Tags, Plus, Edit2, Trash2, X, AlertTriangle, Layers } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface CategoriasViewProps {
   categorias: Categoria[];
@@ -46,7 +47,7 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
         nome,
       };
 
-      const res = await fetch('/api/categorias', {
+      const res = await apiFetch('/api/categorias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -69,7 +70,7 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/categorias?id=${categoriaParaExcluir.id}${cascade ? '&cascade=true' : ''}`, {
+      const res = await apiFetch(`/api/categorias?id=${categoriaParaExcluir.id}${cascade ? '&cascade=true' : ''}`, {
         method: 'DELETE',
       });
       const data = await res.json();

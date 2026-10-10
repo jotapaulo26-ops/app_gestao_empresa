@@ -11,6 +11,7 @@ import {
   X,
   ArrowUpRight,
 } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface InsumosViewProps {
   insumos: Insumo[];
@@ -86,7 +87,7 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
         id: editingInsumo ? editingInsumo.id : undefined,
       };
 
-      const res = await fetch('/api/insumos', {
+      const res = await apiFetch('/api/insumos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -111,7 +112,7 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
 
     try {
       const novoEstoque = Number((insumoEntrada.estoqueAtual + quantidadeEntrada).toFixed(3));
-      const res = await fetch('/api/insumos', {
+      const res = await apiFetch('/api/insumos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,7 +139,7 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/insumos?id=${insumoParaExcluir.id}`, {
+      const res = await apiFetch(`/api/insumos?id=${insumoParaExcluir.id}`, {
         method: 'DELETE',
       });
       const data = await res.json();

@@ -13,6 +13,7 @@ import {
   Building2,
   Sparkles,
 } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface LojaConfigViewProps {
   config?: ConfiguracaoLoja;
@@ -50,7 +51,7 @@ export default function LojaConfigView({ config, onRefresh }: LojaConfigViewProp
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/configuracoes', {
+      const res = await apiFetch('/api/configuracoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),

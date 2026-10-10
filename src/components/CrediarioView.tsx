@@ -17,6 +17,7 @@ import {
   FileText,
 } from 'lucide-react';
 import CobrancaPdfModal from './CobrancaPdfModal';
+import { apiFetch } from '@/lib/api';
 
 interface CrediarioViewProps {
   clientes: Cliente[];
@@ -108,7 +109,7 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
         saldoDevedor: editingCliente ? editingCliente.saldoDevedor : 0,
       };
 
-      const res = await fetch('/api/clientes', {
+      const res = await apiFetch('/api/clientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -132,7 +133,7 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
     setErrorMsg('');
 
     try {
-      const res = await fetch(`/api/clientes?id=${clienteParaExcluir.id}`, {
+      const res = await apiFetch(`/api/clientes?id=${clienteParaExcluir.id}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -160,7 +161,7 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/crediario/amortizar', {
+      const res = await apiFetch('/api/crediario/amortizar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

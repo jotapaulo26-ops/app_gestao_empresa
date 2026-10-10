@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Produto, Categoria, Insumo, TipoProduto, ItemFichaTecnica } from '@/types';
+import { apiFetch } from '@/lib/api';
 import {
   Utensils,
   Plus,
@@ -14,6 +15,9 @@ import {
   Layers,
   X,
   TrendingUp,
+  DollarSign,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface ProdutosViewProps {
@@ -39,17 +43,21 @@ export default function ProdutosView({
   // Form State
   const [nome, setNome] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
-  const [tipo, setTipo] = useState<TipoProduto>('FABRICADO');
+  const [tipo, setTipo] = useState<TipoProduto>('REVENDA');
   const [descricao, setDescricao] = useState('');
-  const [estoqueAtual, setEstoqueAtual] = useState(0);
-  const [estoqueMinimo, setEstoqueMinimo] = useState(2);
-  const [margemLucroPct, setMargemLucroPct] = useState(100);
-  const [custoEmbalagem, setCustoEmbalagem] = useState(2.0);
-  const [custoMaoDeObra, setCustoMaoDeObra] = useState(3.0);
-  const [precoVendaManual, setPrecoVendaManual] = useState<number | null>(null);
+  const [estoqueAtual, setEstoqueAtual] = useState<string | number>(0);
+  const [estoqueMinimo, setEstoqueMinimo] = useState<string | number>(2);
 
+  // Preço de Venda Direto & Custos
+  const [precoVendaDireto, setPrecoVendaDireto] = useState('');
+  const [custoDireto, setCustoDireto] = useState('');
+  const [mostrarCalculadora, setMostrarCalculadora] = useState(false);
+
+  // Ficha Técnica / Calculadora Avançada
+  const [margemLucroPct, setMargemLucroPct] = useState(100);
+  const [custoEmbalagem, setCustoEmbalagem] = useState(0);
+  const [custoMaoDeObra, setCustoMaoDeObra] = useState(0);
   const [fichaTecnica, setFichaTecnica] = useState<ItemFichaTecnica[]>([]);
-  const [custoCompraDireta, setCustoCompraDireta] = useState(0);
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [produtoParaExcluir, setProdutoParaExcluir] = useState<Produto | null>(null);
@@ -59,25 +67,32 @@ export default function ProdutosView({
 
   // CALCULADORA DE CUSTOS EM TEMPO REAL
   const custoInsumosCalculado = useMemo(() => {
-    if (tipo === 'REVENDA') return custoCompraDireta;
+    if (tipo === 'REVENDA') return Number(custoDireto) || 0;
     return fichaTecnica.reduce((acc, item) => {
       const ins = insumos.find((i) => i.id === item.insumoId);
       if (!ins) return acc;
       return acc + ins.custoUnitario * item.quantidade;
     }, 0);
-  }, [tipo, custoCompraDireta, fichaTecnica, insumos]);
+  }, [tipo, custoDireto, fichaTecnica, insumos]);
 
   const custoTotalProducao = useMemo(() => {
-    if (tipo === 'REVENDA') return custoCompraDireta;
+    if (tipo === 'REVENDA') return Number(custoDireto) || 0;
     return Number((custoInsumosCalculado + (Number(custoEmbalagem) || 0) + (Number(custoMaoDeObra) || 0)).toFixed(2));
-  }, [tipo, custoCompraDireta, custoInsumosCalculado, custoEmbalagem, custoMaoDeObra]);
+  }, [tipo, custoDireto, custoInsumosCalculado, custoEmbalagem, custoMaoDeObra]);
 
   const precoVendaSugerido = useMemo(() => {
-    return Number((custoTotalProducao * (1 + (Number(margemLucroPct) || 0) / 100)).toFixed(2));
+    if (custoTotalProducao > 0) {
+      return Number((custoTotalProducao * (1 + (Number(margemLucroPct) || 0) / 100)).toFixed(2));
+    }
+    return 0;
   }, [custoTotalProducao, margemLucroPct]);
 
-  const precoVendaFinal = precoVendaManual !== null ? precoVendaManual : precoVendaSugerido;
-  const lucroEstimadoUnitario = Math.max(0, precoVendaFinal - custoTotalProducao);
+  // Preço final: se o usuário digitou direto, usa o digitado!
+  const precoVendaFinal = useMemo(() => {
+    const direto = parseFloat(precoVendaDireto);
+    if (!isNaN(direto) && direto > 0) return direto;
+    return precoVendaSugerido > 0 ? precoVendaSugerido : 0;
+  }, [precoVendaDireto, precoVendaSugerido]);
 
   // Filtros
   const filteredProdutos = produtos.filter((p) => {
@@ -92,15 +107,16 @@ export default function ProdutosView({
     setEditingProduto(null);
     setNome('');
     setCategoriaId(categorias[0]?.id || '');
-    setTipo('FABRICADO');
+    setTipo('REVENDA');
     setDescricao('');
     setEstoqueAtual(0);
     setEstoqueMinimo(2);
+    setPrecoVendaDireto('');
+    setCustoDireto('');
+    setMostrarCalculadora(false);
     setMargemLucroPct(100);
-    setCustoEmbalagem(2.0);
-    setCustoMaoDeObra(3.0);
-    setCustoCompraDireta(0);
-    setPrecoVendaManual(null);
+    setCustoEmbalagem(0);
+    setCustoMaoDeObra(0);
     setFichaTecnica([]);
     setErrorMsg('');
     setModalOpen(true);
@@ -114,12 +130,13 @@ export default function ProdutosView({
     setDescricao(prod.descricao || '');
     setEstoqueAtual(prod.estoqueAtual);
     setEstoqueMinimo(prod.estoqueMinimo);
-    setMargemLucroPct(prod.margemLucroPct);
+    setPrecoVendaDireto(prod.precoVenda ? prod.precoVenda.toString() : '');
+    setCustoDireto(prod.custoTotal ? prod.custoTotal.toString() : '');
+    setMargemLucroPct(prod.margemLucroPct || 100);
     setCustoEmbalagem(prod.custoEmbalagem || 0);
     setCustoMaoDeObra(prod.custoMaoDeObra || 0);
-    setCustoCompraDireta(prod.tipo === 'REVENDA' ? prod.custoTotal : 0);
-    setPrecoVendaManual(prod.precoVenda);
     setFichaTecnica(prod.fichaTecnica ? [...prod.fichaTecnica] : []);
+    setMostrarCalculadora(Boolean(prod.tipo === 'FABRICADO' && prod.fichaTecnica && prod.fichaTecnica.length > 0));
     setErrorMsg('');
     setModalOpen(true);
   };
@@ -141,7 +158,17 @@ export default function ProdutosView({
 
   const handleSaveProduto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nome.trim() || !categoriaId) return;
+    if (!nome.trim()) {
+      setErrorMsg('Informe o nome do produto.');
+      return;
+    }
+    const finalCategoriaId = categoriaId || categorias[0]?.id || 'cat-geral';
+
+    const precoFinalSalvar = precoVendaFinal;
+    if (precoFinalSalvar <= 0) {
+      setErrorMsg('Informe um Preço de Venda válido (maior que zero).');
+      return;
+    }
 
     setLoading(true);
     setErrorMsg('');
@@ -149,8 +176,8 @@ export default function ProdutosView({
     try {
       const payload: Partial<Produto> = {
         id: editingProduto ? editingProduto.id : undefined,
-        nome,
-        categoriaId,
+        nome: nome.trim(),
+        categoriaId: finalCategoriaId,
         tipo,
         descricao,
         estoqueAtual: Number(estoqueAtual) || 0,
@@ -160,11 +187,11 @@ export default function ProdutosView({
         custoEmbalagem: tipo === 'FABRICADO' ? Number(custoEmbalagem) || 0 : 0,
         custoMaoDeObra: tipo === 'FABRICADO' ? Number(custoMaoDeObra) || 0 : 0,
         custoTotal: custoTotalProducao,
-        precoVenda: Number(precoVendaFinal) || 0,
+        precoVenda: Number(precoFinalSalvar.toFixed(2)),
         fichaTecnica: tipo === 'FABRICADO' ? fichaTecnica : [],
       };
 
-      const res = await fetch('/api/produtos', {
+      const res = await apiFetch('/api/produtos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -187,7 +214,7 @@ export default function ProdutosView({
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/produtos?id=${produtoParaExcluir.id}`, {
+      const res = await apiFetch(`/api/produtos?id=${produtoParaExcluir.id}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -357,10 +384,13 @@ export default function ProdutosView({
               <div>
                 <label className="block text-[11px] font-bold text-zinc-400 mb-1">Categoria *</label>
                 <select
-                  value={categoriaId}
+                  value={categoriaId || (categorias[0]?.id || 'cat-geral')}
                   onChange={(e) => setCategoriaId(e.target.value)}
                   className="w-full text-xs p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none"
                 >
+                  {categorias.length === 0 && (
+                    <option value="cat-geral">Geral (Padrão)</option>
+                  )}
                   {categorias.map((c) => (
                     <option key={c.id} value={c.id}>{c.nome}</option>
                   ))}
@@ -395,78 +425,160 @@ export default function ProdutosView({
                 </div>
               </div>
 
-              {/* Ficha Técnica (se Fabricado) */}
-              {tipo === 'FABRICADO' && (
-                <div className="p-3 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-2">
+              {/* PREÇO DE VENDA DIRETO (DESTAQUE) */}
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-300 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-emerald-400">
+                    <DollarSign className="w-3.5 h-3.5" /> Preço de Venda (R$) *
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-normal">Valor no PDV</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-zinc-500 font-bold text-xs">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    placeholder="Ex: 25.00"
+                    value={precoVendaDireto}
+                    onChange={(e) => setPrecoVendaDireto(e.target.value)}
+                    className="w-full text-sm font-black pl-9 pr-3 py-2.5 bg-zinc-900 border border-emerald-500/50 rounded-xl text-emerald-400 focus:outline-none focus:border-emerald-400 shadow-[0_0_12px_rgba(0,255,136,0.15)] placeholder:text-zinc-600"
+                  />
+                </div>
+              </div>
+
+              {/* Estoque */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">Estoque Atual</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={estoqueAtual}
+                    onChange={(e) => setEstoqueAtual(e.target.value)}
+                    className="w-full text-xs p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-center focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1">Estoque Mínimo</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={estoqueMinimo}
+                    onChange={(e) => setEstoqueMinimo(e.target.value)}
+                    className="w-full text-xs p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-center focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Custo Unitário Direto (Opcional) */}
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 mb-1 flex items-center justify-between">
+                  <span>Custo de Compra / Produção (R$)</span>
+                  <span className="text-[10px] text-zinc-600">Opcional</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-zinc-500 text-xs">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={custoDireto}
+                    onChange={(e) => setCustoDireto(e.target.value)}
+                    className="w-full text-xs pl-8 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-zinc-700"
+                  />
+                </div>
+              </div>
+
+              {/* Botão de Abrir Calculadora de Custos com Insumos (Opcional) */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const novoEstado = !mostrarCalculadora;
+                    setMostrarCalculadora(novoEstado);
+                    if (novoEstado) setTipo('FABRICADO');
+                  }}
+                  className="w-full py-2 px-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-400 hover:text-white flex items-center justify-between transition-all"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Calculator className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Calcular com Ficha Técnica / Insumos</span>
+                  </div>
+                  {mostrarCalculadora ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {/* Seção Opcional de Ficha Técnica */}
+              {mostrarCalculadora && (
+                <div className="p-3 bg-zinc-900 rounded-2xl border border-purple-500/30 space-y-3 animate-in fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-zinc-300">Ficha Técnica / Insumos</span>
+                    <span className="text-[11px] font-bold text-purple-300">Ficha Técnica da Receita</span>
                     <button
                       type="button"
                       onClick={handleAddInsumoNaReceita}
-                      className="text-[10px] font-bold text-emerald-400 px-2 py-0.5 bg-emerald-500/10 rounded-lg border border-emerald-500/30"
+                      className="text-[10px] font-bold text-purple-400 px-2 py-0.5 bg-purple-500/10 rounded-lg border border-purple-500/30"
                     >
                       + Insumo
                     </button>
                   </div>
 
-                  <div className="space-y-1.5">
-                    {fichaTecnica.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-1 text-xs">
-                        <select
-                          value={item.insumoId}
-                          onChange={(e) => handleUpdateItemReceita(idx, e.target.value, item.quantidade)}
-                          className="flex-1 p-1 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-[11px]"
-                        >
-                          {insumos.map((i) => (
-                            <option key={i.id} value={i.id}>{i.nome}</option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0.001"
-                          value={item.quantidade}
-                          onChange={(e) => handleUpdateItemReceita(idx, item.insumoId, parseFloat(e.target.value) || 0)}
-                          className="w-16 p-1 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-white text-[11px]"
-                        />
+                  {fichaTecnica.length === 0 ? (
+                    <p className="text-[10px] text-zinc-500 italic">Nenhum insumo adicionado ainda.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {fichaTecnica.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-1 text-xs">
+                          <select
+                            value={item.insumoId}
+                            onChange={(e) => handleUpdateItemReceita(idx, e.target.value, item.quantidade)}
+                            className="flex-1 p-1 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-[11px]"
+                          >
+                            {insumos.map((i) => (
+                              <option key={i.id} value={i.id}>{i.nome}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.001"
+                            value={item.quantidade}
+                            onChange={(e) => handleUpdateItemReceita(idx, item.insumoId, parseFloat(e.target.value) || 0)}
+                            className="w-16 p-1 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-white text-[11px]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveInsumoNaReceita(idx)}
+                            className="p-1 text-rose-400"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-zinc-800 text-[11px] space-y-1 font-mono">
+                    <div className="flex justify-between text-zinc-400">
+                      <span>Custo dos Insumos:</span>
+                      <span className="text-white">R$ {custoInsumosCalculado.toFixed(2)}</span>
+                    </div>
+                    {precoVendaSugerido > 0 && (
+                      <div className="flex justify-between text-purple-300 font-bold">
+                        <span>Preço Sugerido ({margemLucroPct}%):</span>
                         <button
                           type="button"
-                          onClick={() => handleRemoveInsumoNaReceita(idx)}
-                          className="p-1 text-rose-400"
+                          onClick={() => setPrecoVendaDireto(precoVendaSugerido.toFixed(2))}
+                          className="underline hover:text-white"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          Usar R$ {precoVendaSugerido.toFixed(2)}
                         </button>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
-
-              {/* Bloco Calculadora Margem */}
-              <div className="p-3 bg-zinc-900 rounded-2xl border border-emerald-500/30 space-y-2 font-mono">
-                <div className="flex justify-between text-xs">
-                  <span className="text-zinc-400">Custo Total:</span>
-                  <span className="text-white font-bold">R$ {custoTotalProducao.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-sans">Margem de Lucro (%):</span>
-                  <input
-                    type="number"
-                    step="5"
-                    min="0"
-                    value={margemLucroPct}
-                    onChange={(e) => {
-                      setMargemLucroPct(parseFloat(e.target.value) || 0);
-                      setPrecoVendaManual(null);
-                    }}
-                    className="w-20 p-1 bg-zinc-950 border border-zinc-800 rounded-lg text-right text-emerald-400 font-bold"
-                  />
-                </div>
-                <div className="flex justify-between text-sm font-bold border-t border-zinc-800 pt-1.5">
-                  <span className="text-zinc-300 font-sans">Preço de Venda (R$):</span>
-                  <span className="text-emerald-400 font-black">R$ {precoVendaFinal.toFixed(2)}</span>
-                </div>
-              </div>
 
               <div className="pt-2 flex gap-2">
                 <button

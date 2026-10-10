@@ -43,8 +43,8 @@ export default function HomePage() {
 
   // Carrega os dados da loja conectada
   const loadAllData = useCallback(async (lojaIdAlvo?: string, tokenAlvo?: string) => {
-    const lId = lojaIdAlvo || sessao?.lojaId;
-    const tok = tokenAlvo || sessao?.token;
+    const lId = lojaIdAlvo || sessao?.lojaId || (typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_loja_id') : null);
+    const tok = tokenAlvo || sessao?.token || (typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_token') : null);
 
     if (!lId) return;
 

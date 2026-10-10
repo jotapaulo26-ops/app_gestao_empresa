@@ -65,7 +65,7 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao realizar login.');
 
-      if (lembrarMe && typeof window !== 'undefined') {
+      if (typeof window !== 'undefined') {
         localStorage.setItem('erp_usuario_token', data.token);
         localStorage.setItem('erp_usuario_loja_id', data.lojaId);
       }

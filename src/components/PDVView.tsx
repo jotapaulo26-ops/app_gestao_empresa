@@ -35,6 +35,7 @@ import {
   Coffee,
   Check,
 } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface PDVViewProps {
   categorias: Categoria[];
@@ -208,7 +209,7 @@ export default function PDVView({
         observacoes,
       };
 
-      const res = await fetch('/api/pedidos', {
+      const res = await apiFetch('/api/pedidos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
