@@ -27,12 +27,15 @@ export default function PedidosView({ pedidos, clientes, config, onRefresh }: Pe
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const filteredPedidos = pedidos.filter((p) => {
-    const matchCod = p.codigo.toString().includes(search);
-    const cli = clientes.find((c) => c.id === p.clienteId);
+  const filteredPedidos = (pedidos || []).filter((p) => {
+    if (!p) return false;
+    const codStr = p.codigo != null ? p.codigo.toString() : '';
+    const matchCod = codStr.includes(search);
+    const cli = (clientes || []).find((c) => c && c.id === p.clienteId);
+    const qLower = (search || '').toLowerCase();
     const matchNome =
-      (cli && cli.nome.toLowerCase().includes(search.toLowerCase())) ||
-      (p.nomeClienteAvulso && p.nomeClienteAvulso.toLowerCase().includes(search.toLowerCase()));
+      (cli && (cli.nome || '').toLowerCase().includes(qLower)) ||
+      (p.nomeClienteAvulso && p.nomeClienteAvulso.toLowerCase().includes(qLower));
     return matchCod || matchNome;
   });
 

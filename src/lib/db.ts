@@ -14,6 +14,7 @@ import {
   Pedido,
   PagamentoCrediario,
   ConfiguracaoLoja,
+  ItemFichaTecnica,
 } from '@/types';
 
 // Em ambientes serverless (Vercel / AWS Lambda), o diretório /var/task é Read-Only.
@@ -266,19 +267,38 @@ export function encerrarSessao(token: string): boolean {
 
 export function calculateRecipeCost(
   insumosList: Insumo[],
-  fichaTecnica: { insumoId: string; quantidade: number }[],
+  fichaTecnica: ItemFichaTecnica[],
   custoEmbalagem: number = 0,
-  custoMaoDeObra: number = 0
-): { custoInsumos: number; custoTotal: number } {
-  let custoInsumos = 0;
+  custoMaoDeObra: number = 0,
+  rendimentoReceita: number = 1,
+  custoGasEnergia: number = 0
+): { custoInsumos: number; custoUnitarioInsumos: number; custoTotal: number } {
+  let custoInsumosReceita = 0;
   for (const item of fichaTecnica) {
     const insumo = insumosList.find((i) => i.id === item.insumoId);
     if (insumo) {
-      custoInsumos += insumo.custoUnitario * item.quantidade;
+      let fator = item.fatorConversao ?? 1;
+      if (!item.fatorConversao && item.unidadeUso) {
+        if (insumo.unidade === 'kg' && item.unidadeUso === 'g') fator = 0.001;
+        else if (insumo.unidade === 'g' && item.unidadeUso === 'kg') fator = 1000;
+        else if (insumo.unidade === 'l' && item.unidadeUso === 'ml') fator = 0.001;
+        else if (insumo.unidade === 'ml' && item.unidadeUso === 'l') fator = 1000;
+      }
+      const qtdPadrao = (Number(item.quantidade) || 0) * fator;
+      custoInsumosReceita += (Number(insumo.custoUnitario) || 0) * qtdPadrao;
     }
   }
-  const custoTotal = Number((custoInsumos + custoEmbalagem + custoMaoDeObra).toFixed(2));
-  return { custoInsumos: Number(custoInsumos.toFixed(2)), custoTotal };
+
+  const rendimento = Math.max(1, Number(rendimentoReceita) || 1);
+  const custoUnitarioInsumos = Number((custoInsumosReceita / rendimento).toFixed(2));
+  const rateioLotePorUnidade = Number(((Number(custoMaoDeObra || 0) + Number(custoGasEnergia || 0)) / rendimento).toFixed(2));
+  const custoTotal = Number((custoUnitarioInsumos + rateioLotePorUnidade + Number(custoEmbalagem || 0)).toFixed(2));
+
+  return {
+    custoInsumos: Number(custoInsumosReceita.toFixed(2)),
+    custoUnitarioInsumos,
+    custoTotal,
+  };
 }
 
 // =================== CATEGORIAS ===================
@@ -379,15 +399,20 @@ export function saveInsumo(insumo: Insumo, lojaId?: string): Insumo {
   for (let i = 0; i < loja.produtos.length; i++) {
     const prod = loja.produtos[i];
     if (prod.tipo === 'FABRICADO' && prod.fichaTecnica?.some((f) => f.insumoId === insumo.id)) {
-      const { custoInsumos, custoTotal } = calculateRecipeCost(
+      const { custoInsumos, custoUnitarioInsumos, custoTotal } = calculateRecipeCost(
         loja.insumos,
         prod.fichaTecnica,
-        prod.custoEmbalagem,
-        prod.custoMaoDeObra
+        prod.custoEmbalagem || 0,
+        prod.custoMaoDeObra || 0,
+        prod.rendimentoReceita || 1,
+        prod.custoGasEnergia || 0
       );
       prod.custoInsumos = custoInsumos;
+      prod.custoUnitarioInsumos = custoUnitarioInsumos;
       prod.custoTotal = custoTotal;
-      prod.precoVenda = Number((custoTotal * (1 + prod.margemLucroPct / 100)).toFixed(2));
+      if (!prod.precoVenda || prod.precoVenda === 0) {
+        prod.precoVenda = Number((custoTotal * (1 + (prod.margemLucroPct || 0) / 100)).toFixed(2));
+      }
     }
   }
 
@@ -430,14 +455,22 @@ export function saveProduto(produto: Produto, lojaId?: string): Produto {
     produto.categoriaId = loja.categorias[0].id;
   }
 
+  produto.rendimentoReceita = Math.max(1, Number(produto.rendimentoReceita) || 1);
+  produto.custoGasEnergia = Number(produto.custoGasEnergia) || 0;
+  produto.custoEmbalagem = Number(produto.custoEmbalagem) || 0;
+  produto.custoMaoDeObra = Number(produto.custoMaoDeObra) || 0;
+
   if (produto.tipo === 'FABRICADO' && produto.fichaTecnica && produto.fichaTecnica.length > 0) {
-    const { custoInsumos, custoTotal } = calculateRecipeCost(
+    const { custoInsumos, custoUnitarioInsumos, custoTotal } = calculateRecipeCost(
       loja.insumos,
       produto.fichaTecnica,
-      produto.custoEmbalagem || 0,
-      produto.custoMaoDeObra || 0
+      produto.custoEmbalagem,
+      produto.custoMaoDeObra,
+      produto.rendimentoReceita,
+      produto.custoGasEnergia
     );
     produto.custoInsumos = custoInsumos;
+    produto.custoUnitarioInsumos = custoUnitarioInsumos;
     produto.custoTotal = custoTotal;
     if (!produto.precoVenda || produto.precoVenda === 0) {
       produto.precoVenda = Number((custoTotal * (1 + (produto.margemLucroPct || 0) / 100)).toFixed(2));
@@ -574,6 +607,14 @@ export function createPedido(
   const db = ensureDb();
   const loja = getLoja(lojaId);
 
+  // Verificação de Idempotência (evita duplicar pedidos com o mesmo ID)
+  if ((novoPedidoData as any).id) {
+    const pedidoExistente = loja.pedidos.find((p) => p.id === (novoPedidoData as any).id);
+    if (pedidoExistente) {
+      return { success: true, pedido: pedidoExistente };
+    }
+  }
+
   // Validação do Crediário
   if (novoPedidoData.formaPagamento === 'CREDIARIO') {
     if (!novoPedidoData.clienteId) {
@@ -599,11 +640,20 @@ export function createPedido(
     if (!prod) continue;
 
     if (prod.tipo === 'FABRICADO') {
+      const rendimento = Math.max(1, Number(prod.rendimentoReceita) || 1);
       if (prod.fichaTecnica && prod.fichaTecnica.length > 0) {
         for (const ft of prod.fichaTecnica) {
           const insumo = loja.insumos.find((i) => i.id === ft.insumoId);
           if (insumo) {
-            const consumoTotal = ft.quantidade * item.quantidade;
+            let fator = ft.fatorConversao ?? 1;
+            if (!ft.fatorConversao && ft.unidadeUso) {
+              if (insumo.unidade === 'kg' && ft.unidadeUso === 'g') fator = 0.001;
+              else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
+              else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
+              else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+            }
+            // Consumo proporcional por unidade vendida = (ft.quantidade * fator) / rendimento * item.quantidade
+            const consumoTotal = ((ft.quantidade * fator) / rendimento) * item.quantidade;
             insumo.estoqueAtual = Number(Math.max(0, insumo.estoqueAtual - consumoTotal).toFixed(3));
           }
         }
@@ -621,10 +671,10 @@ export function createPedido(
 
   const pedidoCompleto: Pedido = {
     ...novoPedidoData,
-    id: `ped-${Date.now()}`,
-    codigo: proximoCodigo,
+    id: (novoPedidoData as any).id || `ped-${Date.now()}`,
+    codigo: (novoPedidoData as any).codigo || proximoCodigo,
     status: 'CONCLUIDO',
-    dataVenda: new Date().toISOString(),
+    dataVenda: (novoPedidoData as any).dataVenda || new Date().toISOString(),
   };
 
   loja.pedidos.unshift(pedidoCompleto);
@@ -655,10 +705,18 @@ export function cancelPedido(id: string, lojaId?: string): { success: boolean; e
     if (!prod) continue;
 
     if (prod.tipo === 'FABRICADO' && prod.fichaTecnica) {
+      const rendimento = Math.max(1, Number(prod.rendimentoReceita) || 1);
       for (const ft of prod.fichaTecnica) {
         const insumo = loja.insumos.find((i) => i.id === ft.insumoId);
         if (insumo) {
-          const reposicao = ft.quantidade * item.quantidade;
+          let fator = ft.fatorConversao ?? 1;
+          if (!ft.fatorConversao && ft.unidadeUso) {
+            if (insumo.unidade === 'kg' && ft.unidadeUso === 'g') fator = 0.001;
+            else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
+            else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
+            else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+          }
+          const reposicao = ((ft.quantidade * fator) / rendimento) * item.quantidade;
           insumo.estoqueAtual = Number((insumo.estoqueAtual + reposicao).toFixed(3));
         }
       }
@@ -674,6 +732,74 @@ export function cancelPedido(id: string, lojaId?: string): { success: boolean; e
   db.lojas[loja.id] = loja;
   saveDb(db);
   return { success: true };
+}
+
+// =================== PRODUZIR LOTE / FORNADA ===================
+
+export function produzirLoteProduto(
+  produtoId: string,
+  quantidadeLotes: number = 1,
+  lojaId?: string
+): { success: boolean; produto?: Produto; error?: string } {
+  const db = ensureDb();
+  const loja = getLoja(lojaId);
+  const prod = loja.produtos.find((p) => p.id === produtoId);
+
+  if (!prod) {
+    return { success: false, error: 'Produto não encontrado.' };
+  }
+
+  if (prod.tipo !== 'FABRICADO' || !prod.fichaTecnica || prod.fichaTecnica.length === 0) {
+    return { success: false, error: 'Apenas produtos fabricados com ficha técnica podem ter fornadas produzidas.' };
+  }
+
+  const numLotes = Math.max(1, Number(quantidadeLotes) || 1);
+  const rendimento = Math.max(1, Number(prod.rendimentoReceita) || 1);
+
+  // Validação prévia de estoque dos insumos
+  for (const ft of prod.fichaTecnica) {
+    const insumo = loja.insumos.find((i) => i.id === ft.insumoId);
+    if (insumo) {
+      let fator = ft.fatorConversao ?? 1;
+      if (!ft.fatorConversao && ft.unidadeUso) {
+        if (insumo.unidade === 'kg' && ft.unidadeUso === 'g') fator = 0.001;
+        else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
+        else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
+        else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+      }
+      const necessario = (ft.quantidade * fator) * numLotes;
+      if (insumo.estoqueAtual < necessario) {
+        return {
+          success: false,
+          error: `Estoque insuficiente de "${insumo.nome}". Necessário: ${necessario} ${insumo.unidade}, disponível: ${insumo.estoqueAtual} ${insumo.unidade}.`,
+        };
+      }
+    }
+  }
+
+  // Baixa nos insumos da receita inteira
+  for (const ft of prod.fichaTecnica) {
+    const insumo = loja.insumos.find((i) => i.id === ft.insumoId);
+    if (insumo) {
+      let fator = ft.fatorConversao ?? 1;
+      if (!ft.fatorConversao && ft.unidadeUso) {
+        if (insumo.unidade === 'kg' && ft.unidadeUso === 'g') fator = 0.001;
+        else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
+        else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
+        else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+      }
+      const consumo = (ft.quantidade * fator) * numLotes;
+      insumo.estoqueAtual = Number(Math.max(0, insumo.estoqueAtual - consumo).toFixed(3));
+    }
+  }
+
+  // Adiciona ao estoque de produtos prontos para pronta-entrega
+  const totalUnidades = rendimento * numLotes;
+  prod.estoqueAtual = Number((Number(prod.estoqueAtual || 0) + totalUnidades).toFixed(2));
+
+  db.lojas[loja.id] = loja;
+  saveDb(db);
+  return { success: true, produto: prod };
 }
 
 // =================== DASHBOARD & ESTATÍSTICAS ===================

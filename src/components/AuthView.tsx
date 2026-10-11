@@ -68,6 +68,9 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
       if (typeof window !== 'undefined') {
         localStorage.setItem('erp_usuario_token', data.token);
         localStorage.setItem('erp_usuario_loja_id', data.lojaId);
+        if (data.usuario) {
+          localStorage.setItem('erp_usuario_dados', JSON.stringify(data.usuario));
+        }
       }
 
       setSuccessMsg('Login realizado com sucesso! Carregando sua loja...');
@@ -122,6 +125,9 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
       if (typeof window !== 'undefined') {
         localStorage.setItem('erp_usuario_token', data.token);
         localStorage.setItem('erp_usuario_loja_id', data.lojaId);
+        if (data.usuario) {
+          localStorage.setItem('erp_usuario_dados', JSON.stringify(data.usuario));
+        }
       }
 
       setSuccessMsg('Conta criada com sucesso! Inicializando sua loja zerada...');

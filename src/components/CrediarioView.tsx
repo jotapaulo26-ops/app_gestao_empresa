@@ -63,14 +63,16 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const totalDevedor = clientes.reduce((acc, c) => acc + (c.saldoDevedor || 0), 0);
+  const totalDevedor = (clientes || []).reduce((acc, c) => acc + (Number(c?.saldoDevedor) || 0), 0);
 
-  const filteredClientes = clientes.filter(
-    (c) =>
-      c.nome.toLowerCase().includes(search.toLowerCase()) ||
-      c.telefone.includes(search) ||
-      (c.cpf && c.cpf.includes(search))
-  );
+  const filteredClientes = (clientes || []).filter((c) => {
+    if (!c) return false;
+    const qLower = (search || '').toLowerCase();
+    const nomeMatch = (c.nome || '').toLowerCase().includes(qLower);
+    const telMatch = (c.telefone || '').includes(search);
+    const cpfMatch = c.cpf ? c.cpf.includes(search) : false;
+    return nomeMatch || telMatch || cpfMatch;
+  });
 
   const handleOpenNew = () => {
     setEditingCliente(null);
@@ -255,13 +257,17 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
               <div className="p-3 bg-zinc-900/80 rounded-2xl border border-zinc-800 text-xs space-y-1.5 font-mono">
                 <div className="flex justify-between">
                   <span className="text-zinc-400">Dívida Atual:</span>
-                  <strong className={temDivida ? 'text-rose-400' : 'text-zinc-300'}>
+                  <strong className={temDivida ? 'text-rose-400 font-bold' : 'text-zinc-300'}>
                     R$ {cli.saldoDevedor.toFixed(2)}
                   </strong>
                 </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Limite Autorizado:</span>
-                  <span className="text-white">R$ {cli.limiteCredito.toFixed(2)}</span>
+                <div className="flex justify-between text-emerald-400 font-bold border-t border-zinc-800/80 pt-1">
+                  <span>Crédito Disponível:</span>
+                  <span>R$ {Math.max(0, cli.limiteCredito - cli.saldoDevedor).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-zinc-500 text-[11px]">
+                  <span>Limite Total Autorizado:</span>
+                  <span className="text-zinc-300">R$ {cli.limiteCredito.toFixed(2)}</span>
                 </div>
 
                 <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-1">

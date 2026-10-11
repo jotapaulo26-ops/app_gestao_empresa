@@ -3,6 +3,7 @@ import {
   salvarItemLocal,
   removerItemLocal,
   salvarItensLocais,
+  obterItensLocais,
   enfileirarSincronizacao,
 } from './indexedDb';
 import { syncService } from './syncService';
@@ -25,8 +26,11 @@ export async function salvarProdutoLocalEOnline(payload: Partial<Produto>): Prom
     precoVenda: Number(payload.precoVenda) || 0,
     custoTotal: Number(payload.custoTotal) || 0,
     custoInsumos: Number(payload.custoInsumos) || 0,
+    custoUnitarioInsumos: Number(payload.custoUnitarioInsumos) || 0,
     custoEmbalagem: Number(payload.custoEmbalagem) || 0,
     custoMaoDeObra: Number(payload.custoMaoDeObra) || 0,
+    custoGasEnergia: Number(payload.custoGasEnergia) || 0,
+    rendimentoReceita: Math.max(1, Number(payload.rendimentoReceita) || 1),
     margemLucroPct: Number(payload.margemLucroPct) || 0,
     estoqueAtual: Number(payload.estoqueAtual) || 0,
     estoqueMinimo: Number(payload.estoqueMinimo) || 0,
@@ -47,6 +51,25 @@ export async function salvarProdutoLocalEOnline(payload: Partial<Produto>): Prom
   syncService.processarFila();
 
   return produtoFinal;
+}
+
+export async function produzirLoteLocalEOnline(produtoId: string, quantidadeLotes: number = 1): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await apiFetch('/api/produtos/produzir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ produtoId, quantidadeLotes }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Erro ao produzir lote');
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Erro de conexão' };
+  }
 }
 
 export async function removerProdutoLocalEOnline(id: string): Promise<void> {
@@ -166,8 +189,43 @@ export async function amortizarCrediarioLocalEOnline(body: {
 
 // =================== PEDIDOS (VENDAS NO PDV) ===================
 export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  // 1. Envio Direto Online (quando conectado)
+  if (isOnline) {
+    try {
+      const res = await apiFetch('/api/pedidos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const pedidoCriado: Pedido = await res.json();
+        await salvarItemLocal('pedidos', pedidoCriado);
+
+        // Se for crediário, atualiza o saldo do cliente no armazenamento local imediatamente
+        if (pedidoCriado.formaPagamento === 'CREDIARIO' && pedidoCriado.clienteId) {
+          try {
+            const clientesLocais = await obterItensLocais<Cliente>('clientes');
+            const cli = clientesLocais.find((c) => c.id === pedidoCriado.clienteId);
+            if (cli) {
+              cli.saldoDevedor = Number(((Number(cli.saldoDevedor) || 0) + pedidoCriado.totalLiquido).toFixed(2));
+              await salvarItemLocal('clientes', cli);
+            }
+          } catch {}
+        }
+
+        return pedidoCriado;
+      }
+    } catch (netErr) {
+      console.warn('Conexão instável, usando salvamento offline:', netErr);
+    }
+  }
+
+  // 2. Modo Offline / Fallback de Rede
   const pedidoFinal: Pedido = {
-    id: `ped-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: body.id || `ped-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     codigo: Math.floor(100 + Math.random() * 900),
     dataVenda: new Date().toISOString(),
     status: 'CONCLUIDO',
@@ -183,14 +241,26 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
     observacoes: body.observacoes || '',
   };
 
+  // Atualiza saldo do cliente localmente
+  if (pedidoFinal.formaPagamento === 'CREDIARIO' && pedidoFinal.clienteId) {
+    try {
+      const clientesLocais = await obterItensLocais<Cliente>('clientes');
+      const cli = clientesLocais.find((c) => c.id === pedidoFinal.clienteId);
+      if (cli) {
+        cli.saldoDevedor = Number(((Number(cli.saldoDevedor) || 0) + pedidoFinal.totalLiquido).toFixed(2));
+        await salvarItemLocal('clientes', cli);
+      }
+    } catch {}
+  }
+
   // 1. Grava no banco do celular na hora
   await salvarItemLocal('pedidos', pedidoFinal);
 
-  // 2. Enfileira para envio à nuvem
+  // 2. Enfileira para envio à nuvem com o MESMO ID para garantir idempotência
   await enfileirarSincronizacao({
     endpoint: '/api/pedidos',
     method: 'POST',
-    body,
+    body: { ...body, id: pedidoFinal.id, codigo: pedidoFinal.codigo, dataVenda: pedidoFinal.dataVenda },
   });
 
   // 3. Dispara background sync

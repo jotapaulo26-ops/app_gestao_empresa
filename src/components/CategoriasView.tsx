@@ -77,7 +77,7 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
   };
 
   const qtdProdutosVinculados = categoriaParaExcluir
-    ? produtos.filter((p) => p.categoriaId === categoriaParaExcluir.id).length
+    ? (produtos || []).filter((p) => p && p.categoriaId === categoriaParaExcluir.id).length
     : 0;
 
   return (
@@ -89,7 +89,7 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
             Gestão de Categorias
           </span>
           <span className="text-xl font-black text-white font-mono mt-0.5 block">
-            {categorias.length} Categorias
+            {(categorias || []).length} Categorias
           </span>
           <span className="text-[11px] text-zinc-400">Cards interativos do PDV</span>
         </div>
@@ -103,8 +103,8 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
 
       {/* Lista de Categorias com EDITAR e EXCLUIR */}
       <div className="space-y-3 pb-16">
-        {categorias.map((cat) => {
-          const countProd = produtos.filter((p) => p.categoriaId === cat.id).length;
+        {(categorias || []).map((cat) => {
+          const countProd = (produtos || []).filter((p) => p && p.categoriaId === cat.id).length;
 
           return (
             <div

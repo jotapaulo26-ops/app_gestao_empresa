@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Navbar, { ActiveTab } from '@/components/Navbar';
 import DashboardView from '@/components/DashboardView';
 import PDVView from '@/components/PDVView';
@@ -14,6 +14,7 @@ import AuthView from '@/components/AuthView';
 import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
 import { obterItensLocais, salvarItensLocais } from '@/lib/indexedDb';
 import { syncService } from '@/lib/syncService';
+import { calcularDashboardMetrics } from '@/lib/dashboardMetrics';
 
 interface SessaoState {
   usuario: {
@@ -60,14 +61,14 @@ export default function HomePage() {
         obterItensLocais<Pedido>('pedidos'),
       ]);
 
-      if (localCat.length > 0) setCategorias(localCat);
-      if (localIns.length > 0) setInsumos(localIns);
-      if (localProd.length > 0) setProdutos(localProd);
-      if (localCli.length > 0) setClientes(localCli);
-      if (localPed.length > 0) setPedidos(localPed);
+      if (Array.isArray(localCat) && localCat.length > 0) setCategorias(localCat);
+      if (Array.isArray(localIns) && localIns.length > 0) setInsumos(localIns);
+      if (Array.isArray(localProd) && localProd.length > 0) setProdutos(localProd);
+      if (Array.isArray(localCli) && localCli.length > 0) setClientes(localCli);
+      if (Array.isArray(localPed) && localPed.length > 0) setPedidos(localPed);
 
       // Se já temos produtos ou categorias no celular, libera a interface na hora
-      if (localProd.length > 0 || localCat.length > 0) {
+      if ((Array.isArray(localProd) && localProd.length > 0) || (Array.isArray(localCat) && localCat.length > 0)) {
         setLoading(false);
       }
     } catch (errLocal) {
@@ -95,67 +96,32 @@ export default function HomePage() {
 
       // Categorias
       if (Array.isArray(resCat)) {
-        setCategorias((prev) => {
-          const mapa = new Map(prev.map((c) => [c.id, c]));
-          for (const c of resCat) {
-            if (!mapa.has(c.id)) mapa.set(c.id, c);
-          }
-          const unificados = Array.from(mapa.values());
-          salvarItensLocais('categorias', unificados);
-          return unificados;
-        });
+        setCategorias(resCat);
+        salvarItensLocais('categorias', resCat);
       }
 
       // Insumos
       if (Array.isArray(resIns)) {
-        setInsumos((prev) => {
-          const mapa = new Map(prev.map((i) => [i.id, i]));
-          for (const ins of resIns) {
-            if (!mapa.has(ins.id)) mapa.set(ins.id, ins);
-          }
-          const unificados = Array.from(mapa.values());
-          salvarItensLocais('insumos', unificados);
-          return unificados;
-        });
+        setInsumos(resIns);
+        salvarItensLocais('insumos', resIns);
       }
 
       // Produtos
       if (Array.isArray(resProd)) {
-        setProdutos((prev) => {
-          const mapa = new Map(prev.map((p) => [p.id, p]));
-          for (const prod of resProd) {
-            if (!mapa.has(prod.id)) mapa.set(prod.id, prod);
-          }
-          const unificados = Array.from(mapa.values());
-          salvarItensLocais('produtos', unificados);
-          return unificados;
-        });
+        setProdutos(resProd);
+        salvarItensLocais('produtos', resProd);
       }
 
-      // Clientes
+      // Clientes (aplica na hora o novo saldo devedor e limite disponível)
       if (Array.isArray(resCli)) {
-        setClientes((prev) => {
-          const mapa = new Map(prev.map((c) => [c.id, c]));
-          for (const cli of resCli) {
-            if (!mapa.has(cli.id)) mapa.set(cli.id, cli);
-          }
-          const unificados = Array.from(mapa.values());
-          salvarItensLocais('clientes', unificados);
-          return unificados;
-        });
+        setClientes(resCli);
+        salvarItensLocais('clientes', resCli);
       }
 
-      // Pedidos
+      // Pedidos (lista oficial sem duplicatas)
       if (Array.isArray(resPed)) {
-        setPedidos((prev) => {
-          const mapa = new Map(prev.map((p) => [p.id, p]));
-          for (const ped of resPed) {
-            if (!mapa.has(ped.id)) mapa.set(ped.id, ped);
-          }
-          const unificados = Array.from(mapa.values());
-          salvarItensLocais('pedidos', unificados);
-          return unificados;
-        });
+        setPedidos(resPed);
+        salvarItensLocais('pedidos', resPed);
       }
 
       if (resDash && !resDash.error) setDashboardMetrics(resDash);
@@ -170,35 +136,62 @@ export default function HomePage() {
     }
   }, [sessao?.lojaId, sessao?.token]);
 
-  // Checagem de sessão salva (Lembrar-me)
+  // Checagem de sessão salva e Restauração Imediata (Auto-login 0ms)
   useEffect(() => {
     const verificarSessao = async () => {
-      try {
-        const tokenSalvo = typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_token') : null;
+      if (typeof window === 'undefined') return;
 
-        const headers: Record<string, string> = {};
-        if (tokenSalvo) {
-          headers['Authorization'] = `Bearer ${tokenSalvo}`;
+      const tokenSalvo = localStorage.getItem('erp_usuario_token');
+      const lojaIdSalva = localStorage.getItem('erp_usuario_loja_id');
+      const dadosUsuarioSalvo = localStorage.getItem('erp_usuario_dados');
+
+      // 1. Auto-login Imediato se houver credenciais salvas no aparelho
+      if (tokenSalvo && lojaIdSalva) {
+        let usuario = null;
+        try {
+          usuario = dadosUsuarioSalvo ? JSON.parse(dadosUsuarioSalvo) : null;
+        } catch {}
+
+        if (!usuario) {
+          usuario = {
+            id: 'user-local',
+            nome: 'Lojista',
+            email: '',
+            lojaId: lojaIdSalva,
+            nomeLoja: 'Minha Loja',
+          };
         }
 
-        const res = await fetch('/api/auth/me', { headers });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.usuario) {
-            const novaSessao: SessaoState = {
-              usuario: data.usuario,
-              token: tokenSalvo || '',
-              lojaId: data.lojaId,
-            };
-            setSessao(novaSessao);
-            loadAllData(data.lojaId, tokenSalvo || '');
-          }
-        }
-      } catch (err) {
-        console.error('Nenhuma sessão válida ativa.', err);
-      } finally {
+        const sessaoImediata: SessaoState = {
+          usuario,
+          token: tokenSalvo,
+          lojaId: lojaIdSalva,
+        };
+
+        setSessao(sessaoImediata);
         setCheckingAuth(false);
+        loadAllData(lojaIdSalva, tokenSalvo);
+
+        // 2. Validação silenciosa na nuvem em segundo plano (não bloqueia a abertura)
+        try {
+          const res = await fetch('/api/auth/me', {
+            headers: { Authorization: `Bearer ${tokenSalvo}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.usuario) {
+              setSessao((prev) => (prev ? { ...prev, usuario: data.usuario } : prev));
+              localStorage.setItem('erp_usuario_dados', JSON.stringify(data.usuario));
+            }
+          }
+        } catch (errSync) {
+          // Em caso de falha de rede ou offline, continua no ERP com dados locais
+          console.log('Modo offline: sessão local preservada.');
+        }
+        return;
       }
+
+      setCheckingAuth(false);
     };
 
     verificarSessao();
@@ -221,6 +214,7 @@ export default function HomePage() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('erp_usuario_token');
       localStorage.removeItem('erp_usuario_loja_id');
+      localStorage.removeItem('erp_usuario_dados');
     }
 
     setSessao(null);
@@ -232,6 +226,15 @@ export default function HomePage() {
     setDashboardMetrics(null);
     setConfigLoja(null);
   };
+
+  // Métricas do Dashboard calculadas 100% em TEMPO REAL (Chamada incondicional de Hook no topo)
+  const realTimeDashboardMetrics = useMemo(() => {
+    return calcularDashboardMetrics(pedidos, produtos, clientes, insumos);
+  }, [pedidos, produtos, clientes, insumos]);
+
+  const totalAlertasEstoque =
+    (realTimeDashboardMetrics?.insumosBaixos?.length || 0) +
+    (realTimeDashboardMetrics?.produtosBaixos?.length || 0);
 
   // Se ainda estiver validando a sessão no primeiro load
   if (checkingAuth) {
@@ -250,10 +253,6 @@ export default function HomePage() {
     return <AuthView onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const totalAlertasEstoque =
-    (dashboardMetrics?.insumosBaixos?.length || 0) +
-    (dashboardMetrics?.produtosBaixos?.length || 0);
-
   return (
     <div className="min-h-screen bg-black text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
       {/* Top Header & Bottom Thumb Nav com Botão de Sair */}
@@ -261,8 +260,8 @@ export default function HomePage() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         alertasEstoque={totalAlertasEstoque}
-        nomeLoja={configLoja?.nomeLoja || sessao.usuario.nomeLoja}
-        nomeUsuario={sessao.usuario.nome}
+        nomeLoja={configLoja?.nomeLoja || sessao?.usuario?.nomeLoja || 'Minha Loja'}
+        nomeUsuario={sessao?.usuario?.nome || 'Operador'}
         onLogout={handleLogout}
       />
 
@@ -281,13 +280,15 @@ export default function HomePage() {
                 produtos={produtos}
                 clientes={clientes}
                 config={configLoja || undefined}
-                onOrderCompleted={() => loadAllData()}
+                onOrderCompleted={async () => {
+                  await loadAllData();
+                }}
               />
             )}
 
             {activeTab === 'dashboard' && (
               <DashboardView
-                metrics={dashboardMetrics}
+                metrics={realTimeDashboardMetrics}
                 setActiveTab={setActiveTab}
               />
             )}

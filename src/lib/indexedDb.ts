@@ -13,54 +13,48 @@ export interface SyncTask {
 }
 
 const DB_NAME = 'ErpPdvManuLocalDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Versão 2 para garantir criação de todas as objectStores
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 export function openLocalDB(): Promise<IDBDatabase> {
-  if (typeof window === 'undefined') {
-    return Promise.reject(new Error('IndexedDB só funciona no cliente'));
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return Promise.reject(new Error('IndexedDB não suportado'));
   }
 
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
-      const db = (event.target as IDBOpenDBRequest).result;
+      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        const stores = ['produtos', 'categorias', 'insumos', 'clientes', 'pedidos', 'configuracoes', 'syncQueue'];
 
-      if (!db.objectStoreNames.contains('produtos')) {
-        db.createObjectStore('produtos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('categorias')) {
-        db.createObjectStore('categorias', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('insumos')) {
-        db.createObjectStore('insumos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('clientes')) {
-        db.createObjectStore('clientes', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('pedidos')) {
-        db.createObjectStore('pedidos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('configuracoes')) {
-        db.createObjectStore('configuracoes', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('syncQueue')) {
-        db.createObjectStore('syncQueue', { keyPath: 'id' });
-      }
-    };
+        for (const st of stores) {
+          if (!db.objectStoreNames.contains(st)) {
+            db.createObjectStore(st, { keyPath: 'id' });
+          }
+        }
+      };
 
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
 
-    request.onerror = () => {
+      request.onerror = () => {
+        dbPromise = null;
+        reject(request.error);
+      };
+
+      request.onblocked = () => {
+        console.warn('IndexedDB bloqueado por outra aba aberta');
+      };
+    } catch (err) {
       dbPromise = null;
-      reject(request.error);
-    };
+      reject(err);
+    }
   });
 
   return dbPromise;
@@ -71,7 +65,13 @@ export function openLocalDB(): Promise<IDBDatabase> {
  */
 export async function salvarItensLocais<T>(storeName: string, itens: T[]): Promise<void> {
   try {
+    if (typeof window === 'undefined' || !window.indexedDB) return;
     const db = await openLocalDB();
+    if (!db.objectStoreNames.contains(storeName)) {
+      console.warn(`ObjectStore ${storeName} não existe ainda.`);
+      return;
+    }
+
     const tx = db.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
 
@@ -93,7 +93,13 @@ export async function salvarItensLocais<T>(storeName: string, itens: T[]): Promi
  */
 export async function salvarItemLocal<T>(storeName: string, item: T): Promise<void> {
   try {
+    if (typeof window === 'undefined' || !window.indexedDB) return;
     const db = await openLocalDB();
+    if (!db.objectStoreNames.contains(storeName)) {
+      console.warn(`ObjectStore ${storeName} não existe ainda.`);
+      return;
+    }
+
     const tx = db.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
     store.put(item);
@@ -112,7 +118,13 @@ export async function salvarItemLocal<T>(storeName: string, item: T): Promise<vo
  */
 export async function obterItensLocais<T>(storeName: string): Promise<T[]> {
   try {
+    if (typeof window === 'undefined' || !window.indexedDB) return [];
     const db = await openLocalDB();
+    if (!db.objectStoreNames.contains(storeName)) {
+      console.warn(`ObjectStore ${storeName} não encontrado no IndexedDB local.`);
+      return [];
+    }
+
     const tx = db.transaction(storeName, 'readonly');
     const store = tx.objectStore(storeName);
     const request = store.getAll();
@@ -132,7 +144,10 @@ export async function obterItensLocais<T>(storeName: string): Promise<T[]> {
  */
 export async function removerItemLocal(storeName: string, id: string): Promise<void> {
   try {
+    if (typeof window === 'undefined' || !window.indexedDB) return;
     const db = await openLocalDB();
+    if (!db.objectStoreNames.contains(storeName)) return;
+
     const tx = db.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
     store.delete(id);
@@ -160,7 +175,10 @@ export async function enfileirarSincronizacao(task: Omit<SyncTask, 'id' | 'times
   };
 
   try {
+    if (typeof window === 'undefined' || !window.indexedDB) return fullTask;
     const db = await openLocalDB();
+    if (!db.objectStoreNames.contains('syncQueue')) return fullTask;
+
     const tx = db.transaction('syncQueue', 'readwrite');
     const store = tx.objectStore('syncQueue');
     store.add(fullTask);
@@ -181,7 +199,10 @@ export async function enfileirarSincronizacao(task: Omit<SyncTask, 'id' | 'times
  */
 export async function obterFilaSincronizacao(): Promise<SyncTask[]> {
   try {
+    if (typeof window === 'undefined' || !window.indexedDB) return [];
     const db = await openLocalDB();
+    if (!db.objectStoreNames.contains('syncQueue')) return [];
+
     const tx = db.transaction('syncQueue', 'readonly');
     const store = tx.objectStore('syncQueue');
     const request = store.getAll();
@@ -201,7 +222,10 @@ export async function obterFilaSincronizacao(): Promise<SyncTask[]> {
  */
 export async function removerDaFila(id: string): Promise<void> {
   try {
+    if (typeof window === 'undefined' || !window.indexedDB) return;
     const db = await openLocalDB();
+    if (!db.objectStoreNames.contains('syncQueue')) return;
+
     const tx = db.transaction('syncQueue', 'readwrite');
     const store = tx.objectStore('syncQueue');
     store.delete(id);

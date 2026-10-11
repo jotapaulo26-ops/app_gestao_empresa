@@ -19,7 +19,9 @@ export interface Insumo {
 
 export interface ItemFichaTecnica {
   insumoId: string;
-  quantidade: number; // quantidade utilizada na unidade de medida do insumo
+  quantidade: number; // quantidade utilizada na unidade de uso selecionada
+  unidadeUso?: string; // ex: 'g', 'kg', 'ml', 'l', 'un'
+  fatorConversao?: number; // ex: 0.001 para converter g em kg
 }
 
 export type TipoProduto = 'FABRICADO' | 'REVENDA';
@@ -31,10 +33,13 @@ export interface Produto {
   tipo: TipoProduto;
   precoVenda: number;
   margemLucroPct: number; // % de margem programada
-  custoInsumos: number;
-  custoEmbalagem: number;
-  custoMaoDeObra: number;
-  custoTotal: number;
+  custoInsumos: number; // Custo dos insumos da receita inteira
+  custoUnitarioInsumos?: number; // Custo dos insumos dividido pelo rendimento
+  custoEmbalagem: number; // Custo de embalagem por unidade
+  custoMaoDeObra: number; // Custo de mão de obra do lote
+  custoGasEnergia?: number; // Custo de gás/energia do lote
+  rendimentoReceita?: number; // Quantas unidades a receita inteira rende (ex: 30 brigadeiros)
+  custoTotal: number; // Custo final de 1 unidade pronta
   estoqueAtual: number; // Para REVENDA: estoque do produto; Para FABRICADO: produtos prontos já preparados ou 0
   estoqueMinimo: number;
   fichaTecnica: ItemFichaTecnica[]; // Presente quando tipo == 'FABRICADO'

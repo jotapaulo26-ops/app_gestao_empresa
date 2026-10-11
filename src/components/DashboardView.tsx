@@ -28,7 +28,6 @@ interface DashboardViewProps {
 }
 
 export default function DashboardView({ metrics, setActiveTab }: DashboardViewProps) {
-  // Estado para interação do gráfico diário (ao tocar numa barra)
   const [selectedDia, setSelectedDia] = useState<any | null>(null);
   
   if (!metrics) {
@@ -39,24 +38,25 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
     );
   }
 
-  const {
-    totalHoje = 0,
-    quantidadeVendasHoje = 0,
-    faturamentoGeral = 0,
-    lucroGeral = 0,
-    margemGeralPct = 0,
-    totalCrediarioRealAcumulado = 0,
-    insumosBaixos = [],
-    produtosBaixos = [],
-    maisVendidos = [],
-    produtosMenorSaida = [],
-    top5Clientes = [],
-    ultimos7Dias = [],
-    distribuicaoPagamento = [],
-  } = metrics;
+  const totalHoje = Number(metrics.totalHoje || 0);
+  const quantidadeVendasHoje = Number(metrics.quantidadeVendasHoje || 0);
+  const faturamentoGeral = Number(metrics.faturamentoGeral || 0);
+  const lucroGeral = Number(metrics.lucroGeral || 0);
+  const margemGeralPct = Number(metrics.margemGeralPct || 0);
+  const totalCrediarioRealAcumulado = Number(metrics.totalCrediarioRealAcumulado || 0);
+  const insumosBaixos = Array.isArray(metrics.insumosBaixos) ? metrics.insumosBaixos : [];
+  const produtosBaixos = Array.isArray(metrics.produtosBaixos) ? metrics.produtosBaixos : [];
+  const maisVendidos = Array.isArray(metrics.maisVendidos) ? metrics.maisVendidos : [];
+  const produtosMenorSaida = Array.isArray(metrics.produtosMenorSaida) ? metrics.produtosMenorSaida : [];
+  const top5Clientes = Array.isArray(metrics.top5Clientes) ? metrics.top5Clientes : [];
+  const ultimos7Dias = Array.isArray(metrics.ultimos7Dias) ? metrics.ultimos7Dias : [];
+  const distribuicaoPagamento = Array.isArray(metrics.distribuicaoPagamento) ? metrics.distribuicaoPagamento : [];
 
   // Valor máximo para escala do gráfico diário
-  const maxFaturamentoDia = Math.max(...ultimos7Dias.map((d: any) => d.faturamento), 10);
+  const maxFaturamentoDia = Math.max(
+    ...ultimos7Dias.map((d: any) => Number(d?.faturamento || 0)),
+    10
+  );
 
   return (
     <div className="max-w-md mx-auto px-4 py-4 space-y-4">
@@ -156,8 +156,9 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
         {/* Barras Interativas com altura calculada */}
         <div className="flex items-end justify-between gap-1.5 h-36 pt-4 px-1">
           {ultimos7Dias.map((dia: any, idx: number) => {
-            const perc = Math.max(12, Math.round((dia.faturamento / maxFaturamentoDia) * 100));
-            const isSelected = selectedDia?.data === dia.data;
+            const fat = Number(dia?.faturamento || 0);
+            const perc = Math.max(12, Math.min(100, Math.round((fat / maxFaturamentoDia) * 100)));
+            const isSelected = selectedDia?.data === dia?.data;
 
             return (
               <div
@@ -167,7 +168,7 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
               >
                 {/* Tooltip / Valor acima da barra */}
                 <span className={`text-[9px] font-mono transition-all ${isSelected ? 'text-purple-300 font-bold scale-110' : 'text-zinc-500'}`}>
-                  {dia.faturamento > 0 ? `R$${Math.round(dia.faturamento)}` : '0'}
+                  {fat > 0 ? `R$${Math.round(fat)}` : '0'}
                 </span>
 
                 {/* Coluna da Barra */}
@@ -184,7 +185,7 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
 
                 {/* Legenda do Dia */}
                 <span className={`text-[10px] font-mono uppercase ${isSelected ? 'text-purple-300 font-black' : 'text-zinc-400'}`}>
-                  {dia.diaSemana}
+                  {dia?.diaSemana || ''}
                 </span>
               </div>
             );
@@ -199,11 +200,11 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
                 Detalhes de {selectedDia.diaSemana} ({selectedDia.data})
               </span>
               <strong className="text-white text-sm font-mono">
-                R$ {selectedDia.faturamento.toFixed(2)}
+                R$ {Number(selectedDia.faturamento || 0).toFixed(2)}
               </strong>
             </div>
             <span className="text-xs px-2.5 py-1 rounded-xl bg-purple-500/20 text-purple-300 font-mono font-bold border border-purple-500/30">
-              {selectedDia.pedidos} {selectedDia.pedidos === 1 ? 'pedido' : 'pedidos'}
+              {Number(selectedDia.pedidos || 0)} {Number(selectedDia.pedidos || 0) === 1 ? 'pedido' : 'pedidos'}
             </span>
           </div>
         )}
@@ -224,18 +225,20 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
         {/* Barra de Proporção Multicolorida Contínua */}
         <div className="w-full h-4 rounded-full overflow-hidden flex bg-zinc-900 p-0.5 border border-zinc-800">
           {distribuicaoPagamento.map((item: any, idx: number) => {
-            if (item.porcentagem <= 0) return null;
+            const pct = Number(item?.porcentagem || 0);
+            if (pct <= 0) return null;
             let cor = 'bg-emerald-400';
-            if (item.forma === 'CARTAO_CREDITO' || item.forma === 'CARTAO_DEBITO') cor = 'bg-cyan-400';
-            if (item.forma === 'DINHEIRO') cor = 'bg-yellow-400';
-            if (item.forma === 'CREDIARIO') cor = 'bg-amber-500';
+            const f = String(item?.forma || '');
+            if (f === 'CARTAO_CREDITO' || f === 'CARTAO_DEBITO') cor = 'bg-cyan-400';
+            if (f === 'DINHEIRO') cor = 'bg-yellow-400';
+            if (f === 'CREDIARIO') cor = 'bg-amber-500';
 
             return (
               <div
                 key={idx}
                 className={`${cor} h-full transition-all duration-300`}
-                style={{ width: `${item.porcentagem}%` }}
-                title={`${item.forma}: ${item.porcentagem}%`}
+                style={{ width: `${pct}%` }}
+                title={`${f}: ${pct}%`}
               />
             );
           })}
@@ -244,19 +247,20 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
         {/* Breakdown dos Meios de Pagamento com Cores Neon */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           {distribuicaoPagamento.map((item: any, idx: number) => {
-            let label = item.forma;
+            const f = String(item?.forma || '');
+            let label = f;
             let icon = <Banknote className="w-3.5 h-3.5 text-yellow-400" />;
             let borderCor = 'border-yellow-500/30 text-yellow-300';
 
-            if (item.forma === 'PIX') {
+            if (f === 'PIX') {
               label = 'Pix';
               icon = <QrCode className="w-3.5 h-3.5 text-emerald-400" />;
               borderCor = 'border-emerald-500/30 text-emerald-300';
-            } else if (item.forma.includes('CARTAO')) {
-              label = item.forma === 'CARTAO_CREDITO' ? 'Cartão Crédito' : 'Cartão Débito';
+            } else if (f.includes('CARTAO')) {
+              label = f === 'CARTAO_CREDITO' ? 'Cartão Crédito' : 'Cartão Débito';
               icon = <CreditCard className="w-3.5 h-3.5 text-cyan-400" />;
               borderCor = 'border-cyan-500/30 text-cyan-300';
-            } else if (item.forma === 'CREDIARIO') {
+            } else if (f === 'CREDIARIO') {
               label = 'Crediário';
               icon = <Users className="w-3.5 h-3.5 text-amber-400" />;
               borderCor = 'border-amber-500/30 text-amber-300';
@@ -273,9 +277,9 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
                 </div>
                 <div className="text-right font-mono">
                   <span className="font-bold block text-white text-[11px]">
-                    R$ {item.valor.toFixed(2)}
+                    R$ {Number(item?.valor || 0).toFixed(2)}
                   </span>
-                  <span className="text-[9px] text-zinc-400">{item.porcentagem}%</span>
+                  <span className="text-[9px] text-zinc-400">{Number(item?.porcentagem || 0)}%</span>
                 </div>
               </div>
             );
@@ -306,22 +310,23 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
           <div className="space-y-2">
             {top5Clientes.map((cli: any, idx: number) => {
               const medalhas = ['🥇', '🥈', '🥉', '4º', '5º'];
-              const temDivida = cli.saldoDevedor > 0;
+              const saldoDev = Number(cli?.saldoDevedor || 0);
+              const temDivida = saldoDev > 0;
 
               return (
                 <div
-                  key={cli.id}
+                  key={cli?.id || idx}
                   className="p-3 bg-zinc-900/70 rounded-2xl border border-zinc-800 flex items-center justify-between text-xs hover:border-yellow-500/30 transition-all"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="text-base">{medalhas[idx]}</span>
+                    <span className="text-base">{medalhas[idx] || '•'}</span>
                     <div>
-                      <strong className="text-white block font-bold">{cli.nome}</strong>
+                      <strong className="text-white block font-bold">{cli?.nome || 'Cliente'}</strong>
                       <span className="text-[10px] text-zinc-400">
-                        {cli.qtdPedidos} {cli.qtdPedidos === 1 ? 'pedido' : 'pedidos'} •{' '}
+                        {Number(cli?.qtdPedidos || 0)} {Number(cli?.qtdPedidos || 0) === 1 ? 'pedido' : 'pedidos'} •{' '}
                         {temDivida ? (
                           <span className="text-amber-400 font-bold">
-                            Devendo R$ {cli.saldoDevedor.toFixed(2)}
+                            Devendo R$ {saldoDev.toFixed(2)}
                           </span>
                         ) : (
                           <span className="text-emerald-400 font-bold">Em dia</span>
@@ -332,7 +337,7 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
 
                   <div className="text-right font-mono">
                     <span className="text-sm font-black text-yellow-400 block">
-                      R$ {cli.totalGasto.toFixed(2)}
+                      R$ {Number(cli?.totalGasto || 0).toFixed(2)}
                     </span>
                     <span className="text-[9px] text-zinc-500">Total investido</span>
                   </div>
@@ -365,16 +370,16 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
                 className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20 flex items-center justify-between text-xs"
               >
                 <div>
-                  <strong className="text-rose-200 block font-bold">{prod.nome}</strong>
+                  <strong className="text-rose-200 block font-bold">{prod?.nome || 'Produto'}</strong>
                   <span className="text-[10px] text-zinc-400">
-                    Apenas <strong className="text-rose-300">{prod.quantidade} un</strong> vendidas • Estoque parado:{' '}
-                    <strong className="text-white">{prod.estoqueAtual} un</strong>
+                    Apenas <strong className="text-rose-300">{Number(prod?.quantidade || 0)} un</strong> vendidas • Estoque parado:{' '}
+                    <strong className="text-white">{Number(prod?.estoqueAtual || 0)} un</strong>
                   </span>
                 </div>
 
                 <div className="text-right font-mono">
                   <span className="text-xs font-black text-rose-400 block">
-                    R$ {prod.capitalParado.toFixed(2)}
+                    R$ {Number(prod?.capitalParado || 0).toFixed(2)}
                   </span>
                   <span className="text-[9px] text-zinc-500">Custo parado</span>
                 </div>
@@ -402,19 +407,23 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
         </div>
 
         <div className="space-y-2.5">
-          {maisVendidos.map((prod: any, idx: number) => (
-            <div key={idx} className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-2 text-zinc-300">
-                <span className="w-5 h-5 rounded-full bg-zinc-900 border border-zinc-800 text-cyan-400 flex items-center justify-center text-[10px] font-mono">
-                  {idx + 1}
+          {maisVendidos.length === 0 ? (
+            <p className="text-xs text-zinc-500 text-center py-4">Nenhuma venda registrada ainda.</p>
+          ) : (
+            maisVendidos.map((prod: any, idx: number) => (
+              <div key={idx} className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-zinc-300">
+                  <span className="w-5 h-5 rounded-full bg-zinc-900 border border-zinc-800 text-cyan-400 flex items-center justify-center text-[10px] font-mono">
+                    {idx + 1}
+                  </span>
+                  {prod?.nome || 'Produto'}
                 </span>
-                {prod.nome}
-              </span>
-              <span className="font-mono text-cyan-400 font-bold">
-                {prod.quantidade} un • R$ {prod.faturamento.toFixed(2)}
-              </span>
-            </div>
-          ))}
+                <span className="font-mono text-cyan-400 font-bold">
+                  {Number(prod?.quantidade || 0)} un • R$ {Number(prod?.faturamento || 0).toFixed(2)}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

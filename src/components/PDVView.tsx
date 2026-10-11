@@ -43,7 +43,7 @@ interface PDVViewProps {
   produtos: Produto[];
   clientes: Cliente[];
   config?: ConfiguracaoLoja;
-  onOrderCompleted: () => void;
+  onOrderCompleted: (novoPedido?: Pedido) => void;
 }
 
 export default function PDVView({
@@ -89,11 +89,14 @@ export default function PDVView({
   // Produtos filtrados
   const filteredProdutos = useMemo(() => {
     if (!selectedCategoriaId) return [];
-    return produtos.filter((prod) => {
+    const safeProdutos = Array.isArray(produtos) ? produtos : [];
+    const qLower = (searchQuery || '').toLowerCase();
+    return safeProdutos.filter((prod) => {
+      if (!prod) return false;
       const matchCat = selectedCategoriaId === 'all' || prod.categoriaId === selectedCategoriaId;
-      const matchSearch =
-        prod.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.descricao?.toLowerCase().includes(searchQuery.toLowerCase());
+      const nomeLower = (prod.nome || '').toLowerCase();
+      const descLower = (prod.descricao || '').toLowerCase();
+      const matchSearch = nomeLower.includes(qLower) || descLower.includes(qLower);
       return matchCat && matchSearch;
     });
   }, [produtos, selectedCategoriaId, searchQuery]);
@@ -214,7 +217,7 @@ export default function PDVView({
 
       setPedidoFinalizado(pedidoSalvo);
       clearCart();
-      onOrderCompleted();
+      onOrderCompleted(pedidoSalvo);
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro inesperado ao registrar venda');
     } finally {
@@ -393,11 +396,14 @@ export default function PDVView({
             className="w-full text-xs py-3 px-3 bg-zinc-900 border border-zinc-800 rounded-2xl text-white focus:outline-none focus:border-emerald-500 font-medium"
           >
             <option value="">Cliente Balcão (Avulso sem crediário)</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome} (Limite: R$ {c.limiteCredito.toFixed(2)} | Dívida: R$ {c.saldoDevedor.toFixed(2)})
-              </option>
-            ))}
+            {clientes.map((c) => {
+              const disp = Math.max(0, c.limiteCredito - c.saldoDevedor);
+              return (
+                <option key={c.id} value={c.id}>
+                  {c.nome} (Disp: R$ {disp.toFixed(2)} | Dívida: R$ {c.saldoDevedor.toFixed(2)})
+                </option>
+              );
+            })}
           </select>
 
           {currentCliente && (
@@ -586,15 +592,15 @@ export default function PDVView({
                 Ver Todos
               </span>
               <span className="text-[11px] text-zinc-400 font-mono block">
-                {produtos.length} produtos
+                {(produtos || []).length} produtos
               </span>
             </div>
           </button>
 
           {/* Cards das Categorias com Cores Neon Individuais */}
-          {categorias.map((cat, idx) => {
-            const theme = getCategoryTheme(cat.nome, idx);
-            const qtd = produtos.filter((p) => p.categoriaId === cat.id).length;
+          {(categorias || []).map((cat, idx) => {
+            const theme = getCategoryTheme(cat?.nome || '', idx);
+            const qtd = (produtos || []).filter((p) => p && p.categoriaId === cat.id).length;
 
             return (
               <button

@@ -16,6 +16,18 @@
       "usuarioId": "user-1791604878478-928",
       "lojaId": "loja-1791604878478-40",
       "criadoEm": "2026-10-10T04:47:21.137Z"
+    },
+    {
+      "token": "dd4d577a3f97b3d25aa9c9cdbe7b4c589733e12bd911be9bac015008ee83d2a3",
+      "usuarioId": "user-1791604878478-928",
+      "lojaId": "loja-1791604878478-40",
+      "criadoEm": "2026-10-11T12:40:07.064Z"
+    },
+    {
+      "token": "dadd27438cd27485bdb1afe144049f4fb292c65ccf7a8927fcb753690f936edd",
+      "usuarioId": "user-1791604878478-928",
+      "lojaId": "loja-1791604878478-40",
+      "criadoEm": "2026-10-11T12:41:50.348Z"
     }
   ],
   "lojas": {
@@ -23,11 +35,96 @@
       "id": "loja-1791604878478-40",
       "nomeLoja": "MR Doces",
       "criadoEm": "2026-10-10T04:01:18.478Z",
-      "categorias": [],
-      "insumos": [],
-      "produtos": [],
-      "clientes": [],
-      "pedidos": [],
+      "categorias": [
+        {
+          "id": "cat-1791724405233-921",
+          "nome": "Trufas"
+        },
+        {
+          "id": "cat-1791724414554-873",
+          "nome": "Cones"
+        },
+        {
+          "id": "cat-1791724429254-417",
+          "nome": "Bolos de pote"
+        }
+      ],
+      "insumos": [
+        {
+          "id": "ins-1791725829163-821",
+          "nome": "Leite Condensado",
+          "unidade": "un",
+          "custoUnitario": 6.99,
+          "estoqueAtual": 10,
+          "estoqueMinimo": 5,
+          "fornecedor": ""
+        },
+        {
+          "id": "ins-1791725925257-788",
+          "nome": "Chocolate",
+          "unidade": "kg",
+          "custoUnitario": 34.9,
+          "estoqueAtual": 1,
+          "estoqueMinimo": 1,
+          "fornecedor": ""
+        }
+      ],
+      "produtos": [
+        {
+          "id": "prod-1791724498532-310",
+          "nome": "brigadeiro",
+          "categoriaId": "cat-1791724405233-921",
+          "tipo": "FABRICADO",
+          "descricao": "",
+          "precoVenda": 5,
+          "custoTotal": 0,
+          "custoInsumos": 0,
+          "custoEmbalagem": 0,
+          "custoMaoDeObra": 0,
+          "margemLucroPct": 100,
+          "estoqueAtual": 0,
+          "estoqueMinimo": 2,
+          "fichaTecnica": []
+        }
+      ],
+      "clientes": [
+        {
+          "id": "cli-1791724460278-25",
+          "nome": "Joao",
+          "telefone": "16993177138",
+          "cpf": "",
+          "endereco": "",
+          "limiteCredito": 300,
+          "saldoDevedor": 20,
+          "criadoEm": "2026-10-11T13:14:20.278Z"
+        }
+      ],
+      "pedidos": [
+        {
+          "clienteId": "cli-1791724460278-25",
+          "itens": [
+            {
+              "produtoId": "prod-1791724498532-310",
+              "nomeProduto": "brigadeiro",
+              "quantidade": 4,
+              "precoUnitario": 5,
+              "subtotal": 20,
+              "custoUnitario": 0
+            }
+          ],
+          "totalBruto": 20,
+          "desconto": 0,
+          "totalLiquido": 20,
+          "custoTotal": 0,
+          "lucroTotal": 20,
+          "formaPagamento": "CREDIARIO",
+          "observacoes": "",
+          "id": "ped-1791724525033",
+          "codigo": 101,
+          "status": "CONCLUIDO",
+          "dataVenda": "2026-10-11T13:15:25.033Z"
+        }
+      ],
       "pagamentosCrediario": [],
       "configuracaoLoja": {
         "nomeLoja": "MR Doces",

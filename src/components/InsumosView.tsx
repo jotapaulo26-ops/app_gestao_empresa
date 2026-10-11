@@ -43,11 +43,13 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const filteredInsumos = insumos.filter(
-    (i) =>
-      i.nome.toLowerCase().includes(search.toLowerCase()) ||
-      (i.fornecedor && i.fornecedor.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredInsumos = (insumos || []).filter((i) => {
+    if (!i) return false;
+    const qLower = (search || '').toLowerCase();
+    const nomeMatch = (i.nome || '').toLowerCase().includes(qLower);
+    const fornMatch = i.fornecedor ? i.fornecedor.toLowerCase().includes(qLower) : false;
+    return nomeMatch || fornMatch;
+  });
 
   const handleOpenNew = () => {
     setEditingInsumo(null);
