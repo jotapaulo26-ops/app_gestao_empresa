@@ -12,7 +12,7 @@ import CategoriasView from '@/components/CategoriasView';
 import LojaConfigView from '@/components/LojaConfigView';
 import AuthView from '@/components/AuthView';
 import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
-import { obterItensLocais, salvarItensLocais } from '@/lib/indexedDb';
+import { obterItensLocais, salvarItensLocais, obterFilaSincronizacao } from '@/lib/indexedDb';
 import { syncService } from '@/lib/syncService';
 import { calcularDashboardMetrics } from '@/lib/dashboardMetrics';
 
@@ -44,7 +44,7 @@ export default function HomePage() {
 
   const [loading, setLoading] = useState(true);
 
-  // Carrega os dados da loja conectada (Local-First: Celular Primeiro, Nuvem em Segundo Plano)
+  // Carrega os dados da loja conectada (Local-First com Mesclagem Inteligente)
   const loadAllData = useCallback(async (lojaIdAlvo?: string, tokenAlvo?: string) => {
     const lId = lojaIdAlvo || sessao?.lojaId || (typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_loja_id') : null);
     const tok = tokenAlvo || sessao?.token || (typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_token') : null);
@@ -52,8 +52,14 @@ export default function HomePage() {
     if (!lId) return;
 
     // 1. CARREGAMENTO INSTANTÂNEO DO BANCO LOCAL DO CELULAR (0ms)
+    let localCat: Categoria[] = [];
+    let localIns: Insumo[] = [];
+    let localProd: Produto[] = [];
+    let localCli: Cliente[] = [];
+    let localPed: Pedido[] = [];
+
     try {
-      const [localCat, localIns, localProd, localCli, localPed] = await Promise.all([
+      [localCat, localIns, localProd, localCli, localPed] = await Promise.all([
         obterItensLocais<Categoria>('categorias'),
         obterItensLocais<Insumo>('insumos'),
         obterItensLocais<Produto>('produtos'),
@@ -84,6 +90,8 @@ export default function HomePage() {
     }
 
     try {
+      const filaPendentes = await obterFilaSincronizacao();
+
       const [resCat, resIns, resProd, resCli, resPed, resDash, resCfg] = await Promise.all([
         fetch('/api/categorias', { headers }).then((r) => r.json()).catch(() => null),
         fetch('/api/insumos', { headers }).then((r) => r.json()).catch(() => null),
@@ -94,34 +102,71 @@ export default function HomePage() {
         fetch('/api/configuracoes', { headers }).then((r) => r.json()).catch(() => null),
       ]);
 
-      // Categorias
+      // Categorias - Mesclagem inteligente
       if (Array.isArray(resCat)) {
-        setCategorias(resCat);
-        salvarItensLocais('categorias', resCat);
+        const mapa = new Map<string, Categoria>();
+        resCat.forEach((c) => mapa.set(c.id, c));
+        localCat.forEach((c) => {
+          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(c.id));
+          if (!mapa.has(c.id) && !deletado) mapa.set(c.id, c);
+        });
+        const finalCat = Array.from(mapa.values());
+        setCategorias(finalCat);
+        salvarItensLocais('categorias', finalCat);
       }
 
-      // Insumos
+      // Insumos - Mesclagem inteligente
       if (Array.isArray(resIns)) {
-        setInsumos(resIns);
-        salvarItensLocais('insumos', resIns);
+        const mapa = new Map<string, Insumo>();
+        resIns.forEach((i) => mapa.set(i.id, i));
+        localIns.forEach((i) => {
+          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(i.id));
+          if (!mapa.has(i.id) && !deletado) mapa.set(i.id, i);
+        });
+        const finalIns = Array.from(mapa.values());
+        setInsumos(finalIns);
+        salvarItensLocais('insumos', finalIns);
       }
 
-      // Produtos
+      // Produtos - Mesclagem inteligente
       if (Array.isArray(resProd)) {
-        setProdutos(resProd);
-        salvarItensLocais('produtos', resProd);
+        const mapa = new Map<string, Produto>();
+        resProd.forEach((p) => mapa.set(p.id, p));
+        localProd.forEach((p) => {
+          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(p.id));
+          if (!mapa.has(p.id) && !deletado) mapa.set(p.id, p);
+        });
+        const finalProd = Array.from(mapa.values());
+        setProdutos(finalProd);
+        salvarItensLocais('produtos', finalProd);
       }
 
-      // Clientes (aplica na hora o novo saldo devedor e limite disponível)
+      // Clientes - Mesclagem inteligente
       if (Array.isArray(resCli)) {
-        setClientes(resCli);
-        salvarItensLocais('clientes', resCli);
+        const mapa = new Map<string, Cliente>();
+        resCli.forEach((c) => mapa.set(c.id, c));
+        localCli.forEach((c) => {
+          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(c.id));
+          if (!mapa.has(c.id) && !deletado) mapa.set(c.id, c);
+        });
+        const finalCli = Array.from(mapa.values());
+        setClientes(finalCli);
+        salvarItensLocais('clientes', finalCli);
       }
 
-      // Pedidos (lista oficial sem duplicatas)
+      // Pedidos - Mesclagem inteligente
       if (Array.isArray(resPed)) {
-        setPedidos(resPed);
-        salvarItensLocais('pedidos', resPed);
+        const mapa = new Map<string, Pedido>();
+        resPed.forEach((p) => mapa.set(p.id, p));
+        localPed.forEach((p) => {
+          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(p.id));
+          if (!mapa.has(p.id) && !deletado) mapa.set(p.id, p);
+        });
+        const finalPed = Array.from(mapa.values()).sort(
+          (a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime()
+        );
+        setPedidos(finalPed);
+        salvarItensLocais('pedidos', finalPed);
       }
 
       if (resDash && !resDash.error) setDashboardMetrics(resDash);

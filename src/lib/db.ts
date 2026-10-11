@@ -22,6 +22,7 @@ import {
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const DATA_DIR = isServerless ? os.tmpdir() : path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const SEED_FILE = path.join(process.cwd(), 'data', 'db.json');
 
 const INITIAL_SCHEMA: DatabaseSchema = {
   usuarios: [],
@@ -43,15 +44,38 @@ function ensureDb(): DatabaseSchema {
       } catch {}
     }
 
+    // 1. Tenta ler o arquivo de dados ativo (DB_FILE)
     if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed.lojas && Array.isArray(parsed.usuarios)) {
-        memoryDb = parsed;
-        return parsed;
+      try {
+        const raw = fs.readFileSync(DB_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.lojas && Array.isArray(parsed.usuarios)) {
+          memoryDb = parsed;
+          return parsed;
+        }
+      } catch (errRead) {
+        console.warn('Erro ao ler DB_FILE:', errRead);
       }
     }
 
+    // 2. Se for Serverless ou se DB_FILE não existir, carrega do SEED_FILE empacotado no deploy
+    if (fs.existsSync(SEED_FILE)) {
+      try {
+        const rawSeed = fs.readFileSync(SEED_FILE, 'utf-8');
+        const parsedSeed = JSON.parse(rawSeed);
+        if (parsedSeed.lojas && Array.isArray(parsedSeed.usuarios)) {
+          memoryDb = parsedSeed;
+          try {
+            fs.writeFileSync(DB_FILE, JSON.stringify(parsedSeed, null, 2), 'utf-8');
+          } catch {}
+          return parsedSeed;
+        }
+      } catch (errSeed) {
+        console.warn('Erro ao carregar SEED_FILE:', errSeed);
+      }
+    }
+
+    // 3. Fallback apenas se nem o seed existir
     try {
       fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_SCHEMA, null, 2), 'utf-8');
     } catch {}

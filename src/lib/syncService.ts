@@ -2,6 +2,8 @@ import { apiFetch } from './api';
 import {
   obterFilaSincronizacao,
   removerDaFila,
+  atualizarTentativaNaFila,
+  limparFilaSincronizacao,
   SyncTask,
 } from './indexedDb';
 
@@ -29,15 +31,15 @@ class SyncService {
         this.notificar();
       });
 
-      // Checa a cada 15 segundos
+      // Checa a cada 20 segundos
       this.timer = setInterval(() => {
         this.processarFila();
-      }, 15000);
+      }, 20000);
 
-      // Executa checagem inicial
+      // Executa checagem inicial após carregamento
       setTimeout(() => {
         this.processarFila();
-      }, 1500);
+      }, 2000);
     }
   }
 
@@ -86,14 +88,37 @@ class SyncService {
             body: tarefa.body ? JSON.stringify(tarefa.body) : undefined,
           });
 
-          if (res.ok || res.status === 200 || res.status === 201) {
+          // 1. Sucesso na operação (200, 201) ou se for DELETE de item já inexistente (404)
+          if (
+            res.ok ||
+            res.status === 200 ||
+            res.status === 201 ||
+            (tarefa.method === 'DELETE' && res.status === 404)
+          ) {
+            await removerDaFila(tarefa.id);
+            continue;
+          }
+
+          // 2. Erros definitivos do cliente (400, 401, 403, 404, 422)
+          // Não adianta tentar infinitamente, descarta para não travar a fila da nuvem
+          if (res.status >= 400 && res.status < 500) {
+            console.warn(`Tarefa descartada por erro definitivo (${res.status}):`, tarefa.endpoint);
+            await removerDaFila(tarefa.id);
+            continue;
+          }
+
+          // 3. Erros de servidor (500, 502, 503) - tenta até 3 vezes
+          const tentativas = (tarefa.tentativas || 0) + 1;
+          if (tentativas >= 3) {
+            console.warn(`Tarefa descartada após ${tentativas} tentativas:`, tarefa.endpoint);
             await removerDaFila(tarefa.id);
           } else {
-            console.warn(`Tentativa de sincronização falhou (${res.status}):`, tarefa.endpoint);
+            await atualizarTentativaNaFila(tarefa.id, tentativas);
           }
         } catch (err) {
-          console.warn('Erro de rede ao enviar tarefa:', err);
-          break; // Se deu erro de conexão, aguarda a próxima rodada
+          console.warn('Erro de rede ao sincronizar tarefa:', err);
+          // Falha de rede real - interrompe o lote atual e aguarda reconexão
+          break;
         }
       }
 
@@ -108,7 +133,7 @@ class SyncService {
       }
       this.notificar(filaRestante.length);
     } catch (err) {
-      console.error('Erro no processamento da fila de sincronização:', err);
+      console.error('Erro geral no processador de sincronização:', err);
       this.status = 'PENDENTE';
       this.notificar(fila.length);
     } finally {
@@ -118,6 +143,12 @@ class SyncService {
 
   public forcarSincronizacao(): Promise<void> {
     return this.processarFila();
+  }
+
+  public async limparFila(): Promise<void> {
+    await limparFilaSincronizacao();
+    this.status = 'SINCRONIZADO';
+    this.notificar(0);
   }
 }
 

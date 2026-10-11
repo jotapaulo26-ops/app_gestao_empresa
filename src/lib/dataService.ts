@@ -10,9 +10,10 @@ import { syncService } from './syncService';
 import { apiFetch } from './api';
 
 /**
- * SERVIÇO UNIFICADO LOCAL-FIRST
- * Grava imediatamente no IndexedDB do celular (latência zero)
- * e agenda a sincronização com a nuvem de forma resiliente.
+ * SERVIÇO UNIFICADO LOCAL-FIRST RESILIENTE
+ * - Grava imediatamente no IndexedDB do celular (latência zero e proteção offline)
+ * - Se estiver online, envia imediatamente ao servidor para sincronização em tempo real
+ * - Se estiver offline ou a conexão oscilar, enfileira de forma segura sem loop
  */
 
 // =================== PRODUTOS ===================
@@ -40,15 +41,37 @@ export async function salvarProdutoLocalEOnline(payload: Partial<Produto>): Prom
   // 1. Grava no IndexedDB imediatamente
   await salvarItemLocal('produtos', produtoFinal);
 
-  // 2. Enfileira sincronização para a nuvem
-  await enfileirarSincronizacao({
-    endpoint: '/api/produtos',
-    method: 'POST',
-    body: produtoFinal,
-  });
+  // 2. Se online, envia diretamente ao servidor
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
 
-  // 3. Dispara sincronização em segundo plano
-  syncService.processarFila();
+  if (isOnline) {
+    try {
+      const res = await apiFetch('/api/produtos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(produtoFinal),
+      });
+
+      if (res.ok) {
+        const prodServidor = await res.json();
+        await salvarItemLocal('produtos', prodServidor);
+        synced = true;
+      }
+    } catch (err) {
+      console.warn('Conexão instável ao salvar produto online, enfileirando:', err);
+    }
+  }
+
+  // 3. Se offline ou falhou a rede, enfileira
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: '/api/produtos',
+      method: 'POST',
+      body: produtoFinal,
+    });
+    syncService.processarFila();
+  }
 
   return produtoFinal;
 }
@@ -74,11 +97,26 @@ export async function produzirLoteLocalEOnline(produtoId: string, quantidadeLote
 
 export async function removerProdutoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('produtos', id);
-  await enfileirarSincronizacao({
-    endpoint: `/api/produtos?id=${id}`,
-    method: 'DELETE',
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch(`/api/produtos?id=${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 404) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: `/api/produtos?id=${id}`,
+      method: 'DELETE',
+    });
+    syncService.processarFila();
+  }
 }
 
 // =================== CATEGORIAS ===================
@@ -89,23 +127,62 @@ export async function salvarCategoriaLocalEOnline(payload: Partial<Categoria>): 
   };
 
   await salvarItemLocal('categorias', categoriaFinal);
-  await enfileirarSincronizacao({
-    endpoint: '/api/categorias',
-    method: 'POST',
-    body: categoriaFinal,
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch('/api/categorias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(categoriaFinal),
+      });
+
+      if (res.ok) {
+        const catServidor = await res.json();
+        await salvarItemLocal('categorias', catServidor);
+        synced = true;
+      }
+    } catch (err) {
+      console.warn('Conexão instável ao salvar categoria online, enfileirando:', err);
+    }
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: '/api/categorias',
+      method: 'POST',
+      body: categoriaFinal,
+    });
+    syncService.processarFila();
+  }
 
   return categoriaFinal;
 }
 
 export async function removerCategoriaLocalEOnline(id: string, cascade: boolean = false): Promise<void> {
   await removerItemLocal('categorias', id);
-  await enfileirarSincronizacao({
-    endpoint: `/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`,
-    method: 'DELETE',
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch(`/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 404) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: `/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`,
+      method: 'DELETE',
+    });
+    syncService.processarFila();
+  }
 }
 
 // =================== INSUMOS ===================
@@ -121,23 +198,62 @@ export async function salvarInsumoLocalEOnline(payload: Partial<Insumo>): Promis
   };
 
   await salvarItemLocal('insumos', insumoFinal);
-  await enfileirarSincronizacao({
-    endpoint: '/api/insumos',
-    method: 'POST',
-    body: insumoFinal,
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch('/api/insumos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(insumoFinal),
+      });
+
+      if (res.ok) {
+        const insServidor = await res.json();
+        await salvarItemLocal('insumos', insServidor);
+        synced = true;
+      }
+    } catch (err) {
+      console.warn('Conexão instável ao salvar insumo online, enfileirando:', err);
+    }
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: '/api/insumos',
+      method: 'POST',
+      body: insumoFinal,
+    });
+    syncService.processarFila();
+  }
 
   return insumoFinal;
 }
 
 export async function removerInsumoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('insumos', id);
-  await enfileirarSincronizacao({
-    endpoint: `/api/insumos?id=${id}`,
-    method: 'DELETE',
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch(`/api/insumos?id=${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 404) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: `/api/insumos?id=${id}`,
+      method: 'DELETE',
+    });
+    syncService.processarFila();
+  }
 }
 
 // =================== CLIENTES & CREDIÁRIO ===================
@@ -154,23 +270,62 @@ export async function salvarClienteLocalEOnline(payload: Partial<Cliente>): Prom
   };
 
   await salvarItemLocal('clientes', clienteFinal);
-  await enfileirarSincronizacao({
-    endpoint: '/api/clientes',
-    method: 'POST',
-    body: clienteFinal,
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch('/api/clientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clienteFinal),
+      });
+
+      if (res.ok) {
+        const cliServidor = await res.json();
+        await salvarItemLocal('clientes', cliServidor);
+        synced = true;
+      }
+    } catch (err) {
+      console.warn('Conexão instável ao salvar cliente online, enfileirando:', err);
+    }
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: '/api/clientes',
+      method: 'POST',
+      body: clienteFinal,
+    });
+    syncService.processarFila();
+  }
 
   return clienteFinal;
 }
 
 export async function removerClienteLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('clientes', id);
-  await enfileirarSincronizacao({
-    endpoint: `/api/clientes?id=${id}`,
-    method: 'DELETE',
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch(`/api/clientes?id=${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 404) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: `/api/clientes?id=${id}`,
+      method: 'DELETE',
+    });
+    syncService.processarFila();
+  }
 }
 
 export async function amortizarCrediarioLocalEOnline(body: {
@@ -179,12 +334,28 @@ export async function amortizarCrediarioLocalEOnline(body: {
   formaPagamento: string;
   observacao?: string;
 }): Promise<void> {
-  await enfileirarSincronizacao({
-    endpoint: '/api/crediario/amortizar',
-    method: 'POST',
-    body,
-  });
-  syncService.processarFila();
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch('/api/crediario/amortizar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: '/api/crediario/amortizar',
+      method: 'POST',
+      body,
+    });
+    syncService.processarFila();
+  }
 }
 
 // =================== PEDIDOS (VENDAS NO PDV) ===================
@@ -253,17 +424,16 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
     } catch {}
   }
 
-  // 1. Grava no banco do celular na hora
+  // Grava no banco do celular na hora
   await salvarItemLocal('pedidos', pedidoFinal);
 
-  // 2. Enfileira para envio à nuvem com o MESMO ID para garantir idempotência
+  // Enfileira para envio à nuvem com o MESMO ID para garantir idempotência
   await enfileirarSincronizacao({
     endpoint: '/api/pedidos',
     method: 'POST',
     body: { ...body, id: pedidoFinal.id, codigo: pedidoFinal.codigo, dataVenda: pedidoFinal.dataVenda },
   });
 
-  // 3. Dispara background sync
   syncService.processarFila();
 
   return pedidoFinal;
@@ -271,22 +441,54 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
 
 export async function cancelarPedidoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('pedidos', id);
-  await enfileirarSincronizacao({
-    endpoint: `/api/pedidos/${id}`,
-    method: 'DELETE',
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch(`/api/pedidos/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 404) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: `/api/pedidos/${id}`,
+      method: 'DELETE',
+    });
+    syncService.processarFila();
+  }
 }
 
 // =================== CONFIGURAÇÕES DA LOJA ===================
 export async function salvarConfigLocalEOnline(config: ConfiguracaoLoja): Promise<ConfiguracaoLoja> {
   await salvarItemLocal('configuracoes', { id: 'loja-config', ...config });
-  await enfileirarSincronizacao({
-    endpoint: '/api/configuracoes',
-    method: 'POST',
-    body: config,
-  });
-  syncService.processarFila();
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch('/api/configuracoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (res.ok) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: '/api/configuracoes',
+      method: 'POST',
+      body: config,
+    });
+    syncService.processarFila();
+  }
 
   return config;
 }

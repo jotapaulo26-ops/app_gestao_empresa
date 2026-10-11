@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Cloud, CloudUpload, CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Cloud, CloudUpload, CloudOff, RefreshCw, CheckCircle2, Trash2, Clock } from 'lucide-react';
 import { syncService, StatusSincronizacao } from '@/lib/syncService';
 
 export default function SyncStatusBadge() {
@@ -28,6 +28,13 @@ export default function SyncStatusBadge() {
     }, 600);
   };
 
+  const handleLimparFila = async () => {
+    if (confirm('Deseja limpar as pendências travadas da fila de sincronização?')) {
+      await syncService.limparFila();
+      setMenuAberto(false);
+    }
+  };
+
   return (
     <div className="relative inline-block text-left">
       <button
@@ -46,11 +53,20 @@ export default function SyncStatusBadge() {
           </div>
         )}
 
-        {(status === 'SINCRONIZANDO' || status === 'PENDENTE') && (
+        {status === 'SINCRONIZANDO' && (
+          <div className="flex items-center gap-1.5 text-cyan-400 border-cyan-500/30">
+            <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+            <span className="text-[10px] text-cyan-300">
+              {pendentes > 0 ? `Sincronizando (${pendentes})` : 'Salvando...'}
+            </span>
+          </div>
+        )}
+
+        {status === 'PENDENTE' && (
           <div className="flex items-center gap-1.5 text-amber-400 border-amber-500/30">
-            <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-[10px] text-amber-300">
-              {pendentes > 0 ? `${pendentes} pendente${pendentes > 1 ? 's' : ''}` : 'Salvando...'}
+              {pendentes > 0 ? `${pendentes} pendente${pendentes > 1 ? 's' : ''}` : 'Pendente'}
             </span>
           </div>
         )}
@@ -88,8 +104,8 @@ export default function SyncStatusBadge() {
             <div className="p-2 bg-zinc-900 rounded-xl space-y-1 text-[11px]">
               <div className="flex justify-between text-zinc-400">
                 <span>Status da Nuvem:</span>
-                <span className={status === 'SINCRONIZADO' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-                  {status === 'SINCRONIZADO' ? '100% Atualizada' : status === 'OFFLINE' ? 'Salvo no Celular' : 'Sincronizando...'}
+                <span className={status === 'SINCRONIZADO' ? 'text-emerald-400 font-bold' : status === 'OFFLINE' ? 'text-zinc-400' : 'text-cyan-400 font-bold'}>
+                  {status === 'SINCRONIZADO' ? '100% Atualizada' : status === 'OFFLINE' ? 'Salvo no Celular' : status === 'SINCRONIZANDO' ? 'Enviando...' : 'Aguardando Rede'}
                 </span>
               </div>
               {ultimoBackup && (
@@ -100,20 +116,32 @@ export default function SyncStatusBadge() {
               )}
               {pendentes > 0 && (
                 <div className="flex justify-between text-amber-400 font-bold">
-                  <span>Alterações no celular:</span>
+                  <span>Pendências no celular:</span>
                   <span>{pendentes}</span>
                 </div>
               )}
             </div>
 
-            <button
-              onClick={handleForcarSync}
-              disabled={sincronizandoManual}
-              className="w-full py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold rounded-xl border border-emerald-500/40 flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${sincronizandoManual ? 'animate-spin' : ''}`} />
-              {sincronizandoManual ? 'Sincronizando...' : 'Sincronizar Nuvem Agora'}
-            </button>
+            <div className="space-y-1.5">
+              <button
+                onClick={handleForcarSync}
+                disabled={sincronizandoManual}
+                className="w-full py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold rounded-xl border border-emerald-500/40 flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${sincronizandoManual ? 'animate-spin' : ''}`} />
+                {sincronizandoManual ? 'Sincronizando...' : 'Sincronizar Nuvem Agora'}
+              </button>
+
+              {pendentes > 0 && (
+                <button
+                  onClick={handleLimparFila}
+                  className="w-full py-1.5 bg-zinc-900 hover:bg-rose-500/10 text-zinc-400 hover:text-rose-400 text-[10px] font-bold rounded-xl border border-zinc-800 transition-all flex items-center justify-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Limpar Fila Travada</span>
+                </button>
+              )}
+            </div>
           </div>
         </>
       )}

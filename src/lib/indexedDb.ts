@@ -238,3 +238,50 @@ export async function removerDaFila(id: string): Promise<void> {
     console.warn(`Erro ao remover da fila ${id}:`, err);
   }
 }
+
+/**
+ * Atualiza o número de tentativas de uma tarefa
+ */
+export async function atualizarTentativaNaFila(id: string, tentativas: number): Promise<void> {
+  try {
+    if (typeof window === 'undefined' || !window.indexedDB) return;
+    const db = await openLocalDB();
+    if (!db.objectStoreNames.contains('syncQueue')) return;
+
+    const tx = db.transaction('syncQueue', 'readwrite');
+    const store = tx.objectStore('syncQueue');
+    const getReq = store.get(id);
+
+    getReq.onsuccess = () => {
+      if (getReq.result) {
+        const item = getReq.result;
+        item.tentativas = tentativas;
+        store.put(item);
+      }
+    };
+  } catch (err) {
+    console.warn(`Erro ao atualizar tentativas da fila ${id}:`, err);
+  }
+}
+
+/**
+ * Limpa completamente a fila de sincronização (destrava fila em loop)
+ */
+export async function limparFilaSincronizacao(): Promise<void> {
+  try {
+    if (typeof window === 'undefined' || !window.indexedDB) return;
+    const db = await openLocalDB();
+    if (!db.objectStoreNames.contains('syncQueue')) return;
+
+    const tx = db.transaction('syncQueue', 'readwrite');
+    const store = tx.objectStore('syncQueue');
+    store.clear();
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('Erro ao limpar fila de sincronização:', err);
+  }
+}
