@@ -19,24 +19,46 @@ import { salvarConfigLocalEOnline } from '@/lib/dataService';
 interface LojaConfigViewProps {
   config?: ConfiguracaoLoja;
   onRefresh: () => void;
+  onConfigUpdated?: (config: ConfiguracaoLoja) => void;
 }
 
-export default function LojaConfigView({ config, onRefresh }: LojaConfigViewProps) {
-  const [formData, setFormData] = useState<ConfiguracaoLoja>({
-    nomeLoja: config?.nomeLoja || 'ERP & PDV Manu',
-    cnpjCpf: config?.cnpjCpf || '',
-    telefone: config?.telefone || '',
-    endereco: config?.endereco || '',
-    cidade: config?.cidade || 'São Paulo - SP',
-    mensagemRodape: config?.mensagemRodape || 'Agradecemos a sua preferência! Volte sempre.',
-    chavePix: config?.chavePix || '',
-    tipoChavePix: config?.tipoChavePix || 'CELULAR',
-    titularPix: config?.titularPix || '',
-    cidadePix: config?.cidadePix || 'SAO PAULO',
+export default function LojaConfigView({ config, onRefresh, onConfigUpdated }: LojaConfigViewProps) {
+  const [formData, setFormData] = useState<ConfiguracaoLoja>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('erp_loja_config');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {}
+      }
+    }
+    return {
+      nomeLoja: config?.nomeLoja || 'Minha Loja',
+      cnpjCpf: config?.cnpjCpf || '',
+      telefone: config?.telefone || '',
+      endereco: config?.endereco || '',
+      cidade: config?.cidade || 'São Paulo - SP',
+      mensagemRodape: config?.mensagemRodape || 'Agradecemos a sua preferência! Volte sempre.',
+      chavePix: config?.chavePix || '',
+      tipoChavePix: config?.tipoChavePix || 'CELULAR',
+      titularPix: config?.titularPix || '',
+      cidadePix: config?.cidadePix || 'SAO PAULO',
+    };
   });
 
   useEffect(() => {
     if (config) {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('erp_loja_config');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            // Se o localStorage já tiver dados salvos pelo usuário, prioriza o localStorage
+            setFormData(parsed);
+            return;
+          } catch {}
+        }
+      }
       setFormData(config);
     }
   }, [config]);
@@ -52,8 +74,11 @@ export default function LojaConfigView({ config, onRefresh }: LojaConfigViewProp
     setErrorMsg('');
 
     try {
-      await salvarConfigLocalEOnline(formData);
-
+      const saved = await salvarConfigLocalEOnline(formData);
+      setFormData(saved);
+      if (onConfigUpdated) {
+        onConfigUpdated(saved);
+      }
       setSuccessMsg('Configurações salvas com sucesso! As notas e faturas já estão atualizadas.');
       onRefresh();
     } catch (err: any) {

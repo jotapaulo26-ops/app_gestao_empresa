@@ -359,17 +359,34 @@ export async function cancelarPedidoLocalEOnline(id: string): Promise<void> {
 
 // =================== CONFIGURAÇÕES DA LOJA ===================
 export async function salvarConfigLocalEOnline(config: ConfiguracaoLoja): Promise<ConfiguracaoLoja> {
+  // 1. Salva imediatamente no localStorage (0ms)
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('erp_loja_config', JSON.stringify(config));
+    } catch {}
+  }
+
+  // 2. Salva no IndexedDB do navegador
   await salvarItemLocal('configuracoes', { id: 'loja-config', ...config });
 
+  // 3. Persiste no arquivo db.json do servidor local
   try {
     const res = await apiFetch('/api/configuracoes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      },
       body: JSON.stringify(config),
     });
 
     if (res.ok) {
       const cfgServidor = await res.json();
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('erp_loja_config', JSON.stringify(cfgServidor));
+        } catch {}
+      }
       await salvarItemLocal('configuracoes', { id: 'loja-config', ...cfgServidor });
       return cfgServidor;
     }

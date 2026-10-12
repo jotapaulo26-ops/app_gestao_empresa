@@ -63,7 +63,17 @@ export default function HomePage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(null);
-  const [configLoja, setConfigLoja] = useState<ConfiguracaoLoja | null>(null);
+  const [configLoja, setConfigLoja] = useState<ConfiguracaoLoja | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('erp_loja_config');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {}
+      }
+    }
+    return null;
+  });
 
   const [loading, setLoading] = useState(true);
 
@@ -122,7 +132,7 @@ export default function HomePage() {
         fetch('/api/clientes', { headers }).then((r) => r.json()).catch(() => null),
         fetch('/api/pedidos', { headers }).then((r) => r.json()).catch(() => null),
         fetch('/api/dashboard', { headers }).then((r) => r.json()).catch(() => null),
-        fetch('/api/configuracoes', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/configuracoes', { headers, cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ]);
 
       // Categorias - Mesclagem inteligente
@@ -193,7 +203,24 @@ export default function HomePage() {
       }
 
       if (resDash && !resDash.error) setDashboardMetrics(resDash);
-      if (resCfg && !resCfg.error) setConfigLoja(resCfg);
+      if (resCfg && !resCfg.error) {
+        // Prioridade para as configurações locais salvas pelo usuário
+        const savedLocal = typeof window !== 'undefined' ? localStorage.getItem('erp_loja_config') : null;
+        if (savedLocal) {
+          try {
+            setConfigLoja(JSON.parse(savedLocal));
+          } catch {
+            setConfigLoja(resCfg);
+          }
+        } else {
+          setConfigLoja(resCfg);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('erp_loja_config', JSON.stringify(resCfg));
+            } catch {}
+          }
+        }
+      }
 
     } catch (err) {
       console.warn('Modo offline ativo: usando dados salvos no celular.', err);
@@ -359,6 +386,7 @@ export default function HomePage() {
                   <LojaConfigView
                     config={configLoja || undefined}
                     onRefresh={() => loadAllData()}
+                    onConfigUpdated={(novaConfig) => setConfigLoja(novaConfig)}
                   />
                 </ErrorBoundary>
               </div>
