@@ -69,6 +69,17 @@ export default function InstallPwaButton() {
 
   return (
     <>
+      {/* Botão Baixar APK Android Direto */}
+      <a
+        href="/Cozinha.apk"
+        download="Cozinha.apk"
+        className="w-full py-2.5 px-3 bg-zinc-900 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-98 shadow-[0_0_12px_rgba(0,240,255,0.15)] mb-2"
+      >
+        <Smartphone className="w-4 h-4 text-cyan-400" />
+        <span>Baixar App Cozinha (.APK)</span>
+        <Download className="w-3.5 h-3.5 ml-auto text-cyan-400" />
+      </a>
+
       <button
         onClick={handleInstallClick}
         type="button"
