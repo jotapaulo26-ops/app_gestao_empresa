@@ -19,7 +19,6 @@ import {
   CalendarClock,
 } from 'lucide-react';
 import InstallPwaButton from './InstallPwaButton';
-import SyncStatusBadge from './SyncStatusBadge';
 
 export type ActiveTab = 'dashboard' | 'pdv' | 'pedidos' | 'encomendas' | 'crediario' | 'produtos' | 'receitas' | 'insumos' | 'categorias' | 'loja';
 
@@ -168,8 +167,6 @@ export default function Navbar({
         </div>
 
         <div className="flex items-center gap-2">
-          <SyncStatusBadge />
-
           {alertasEstoque > 0 && (
             <button
               onClick={() => handleSelectTab('insumos')}
@@ -191,16 +188,6 @@ export default function Navbar({
           >
             <Store className="w-4 h-4" />
           </button>
-
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              title="Sair / Desconectar"
-              className="p-2 rounded-xl border bg-zinc-900 border-zinc-800 hover:border-rose-500/40 text-zinc-400 hover:text-rose-400 transition-all active:scale-95"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </header>
 
@@ -411,19 +398,6 @@ export default function Navbar({
 
             <div className="pt-3 border-t border-zinc-900 space-y-2">
               <InstallPwaButton />
-
-              {onLogout && (
-                <button
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    onLogout();
-                  }}
-                  className="w-full py-3 px-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-98"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sair da Conta ({nomeUsuario || 'Operador'})</span>
-                </button>
-              )}
             </div>
           </div>
         </div>

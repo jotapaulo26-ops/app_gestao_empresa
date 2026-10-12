@@ -4,16 +4,14 @@ import {
   removerItemLocal,
   salvarItensLocais,
   obterItensLocais,
-  enfileirarSincronizacao,
 } from './indexedDb';
-import { syncService } from './syncService';
 import { apiFetch } from './api';
 
 /**
- * SERVIÇO UNIFICADO LOCAL-FIRST RESILIENTE
- * - Grava imediatamente no IndexedDB do celular (latência zero e proteção offline)
- * - Se estiver online, envia imediatamente ao servidor para sincronização em tempo real
- * - Se estiver offline ou a conexão oscilar, enfileira de forma segura sem loop
+ * SERVIÇO DE ARMAZENAMENTO 100% LOCAL (LOCAL-FIRST)
+ * - Salva imediatamente no IndexedDB do disco local do navegador
+ * - Salva simultaneamente no arquivo data/db.json do disco rígido local
+ * - Zero chamadas de nuvem externa
  */
 
 // =================== PRODUTOS ===================
@@ -41,40 +39,23 @@ export async function salvarProdutoLocalEOnline(payload: Partial<Produto>): Prom
     validadeConservacao: payload.validadeConservacao || '',
   };
 
-  // 1. Grava no IndexedDB imediatamente
+  // 1. Grava no disco local (IndexedDB)
   await salvarItemLocal('produtos', produtoFinal);
 
-  // 2. Se online, envia diretamente ao servidor
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch('/api/produtos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(produtoFinal),
-      });
-
-      if (res.ok) {
-        const prodServidor = await res.json();
-        await salvarItemLocal('produtos', prodServidor);
-        synced = true;
-      }
-    } catch (err) {
-      console.warn('Conexão instável ao salvar produto online, enfileirando:', err);
-    }
-  }
-
-  // 3. Se offline ou falhou a rede, enfileira
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: '/api/produtos',
+  // 2. Grava no disco local (servidor data/db.json)
+  try {
+    const res = await apiFetch('/api/produtos', {
       method: 'POST',
-      body: produtoFinal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(produtoFinal),
     });
-    syncService.atualizarContadorPendentes();
-  }
+
+    if (res.ok) {
+      const prodServidor = await res.json();
+      await salvarItemLocal('produtos', prodServidor);
+      return prodServidor;
+    }
+  } catch (err) {}
 
   return produtoFinal;
 }
@@ -94,72 +75,46 @@ export async function produzirLoteLocalEOnline(produtoId: string, quantidadeLote
 
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Erro de conexão' };
+    return { success: false, error: err.message || 'Erro ao produzir lote' };
   }
 }
 
 export async function removerProdutoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('produtos', id);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch(`/api/produtos?id=${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok || res.status === 404) synced = true;
-    } catch {}
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: `/api/produtos?id=${id}`,
+  try {
+    await apiFetch(`/api/produtos?id=${id}`, {
       method: 'DELETE',
     });
-    syncService.atualizarContadorPendentes();
-  }
+  } catch {}
 }
+
+export const excluirProdutoLocalEOnline = removerProdutoLocalEOnline;
 
 // =================== CATEGORIAS ===================
 export async function salvarCategoriaLocalEOnline(payload: Partial<Categoria>): Promise<Categoria> {
   const categoriaFinal: Categoria = {
     id: payload.id || `cat-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     nome: payload.nome || 'Nova Categoria',
+    icone: payload.icone,
+    cor: payload.cor,
   };
 
   await salvarItemLocal('categorias', categoriaFinal);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch('/api/categorias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(categoriaFinal),
-      });
-
-      if (res.ok) {
-        const catServidor = await res.json();
-        await salvarItemLocal('categorias', catServidor);
-        synced = true;
-      }
-    } catch (err) {
-      console.warn('Conexão instável ao salvar categoria online, enfileirando:', err);
-    }
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: '/api/categorias',
+  try {
+    const res = await apiFetch('/api/categorias', {
       method: 'POST',
-      body: categoriaFinal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(categoriaFinal),
     });
-    syncService.atualizarContadorPendentes();
-  }
+
+    if (res.ok) {
+      const catServidor = await res.json();
+      await salvarItemLocal('categorias', catServidor);
+      return catServidor;
+    }
+  } catch {}
 
   return categoriaFinal;
 }
@@ -167,26 +122,14 @@ export async function salvarCategoriaLocalEOnline(payload: Partial<Categoria>): 
 export async function removerCategoriaLocalEOnline(id: string, cascade: boolean = false): Promise<void> {
   await removerItemLocal('categorias', id);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch(`/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`, {
-        method: 'DELETE',
-      });
-      if (res.ok || res.status === 404) synced = true;
-    } catch {}
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: `/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`,
+  try {
+    await apiFetch(`/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`, {
       method: 'DELETE',
     });
-    syncService.atualizarContadorPendentes();
-  }
+  } catch {}
 }
+
+export const excluirCategoriaLocalEOnline = removerCategoriaLocalEOnline;
 
 // =================== INSUMOS ===================
 export async function salvarInsumoLocalEOnline(payload: Partial<Insumo>): Promise<Insumo> {
@@ -202,35 +145,19 @@ export async function salvarInsumoLocalEOnline(payload: Partial<Insumo>): Promis
 
   await salvarItemLocal('insumos', insumoFinal);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch('/api/insumos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(insumoFinal),
-      });
-
-      if (res.ok) {
-        const insServidor = await res.json();
-        await salvarItemLocal('insumos', insServidor);
-        synced = true;
-      }
-    } catch (err) {
-      console.warn('Conexão instável ao salvar insumo online, enfileirando:', err);
-    }
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: '/api/insumos',
+  try {
+    const res = await apiFetch('/api/insumos', {
       method: 'POST',
-      body: insumoFinal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(insumoFinal),
     });
-    syncService.atualizarContadorPendentes();
-  }
+
+    if (res.ok) {
+      const insServidor = await res.json();
+      await salvarItemLocal('insumos', insServidor);
+      return insServidor;
+    }
+  } catch {}
 
   return insumoFinal;
 }
@@ -238,28 +165,16 @@ export async function salvarInsumoLocalEOnline(payload: Partial<Insumo>): Promis
 export async function removerInsumoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('insumos', id);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch(`/api/insumos?id=${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok || res.status === 404) synced = true;
-    } catch {}
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: `/api/insumos?id=${id}`,
+  try {
+    await apiFetch(`/api/insumos?id=${id}`, {
       method: 'DELETE',
     });
-    syncService.atualizarContadorPendentes();
-  }
+  } catch {}
 }
 
-// =================== CLIENTES & CREDIÁRIO ===================
+export const excluirInsumoLocalEOnline = removerInsumoLocalEOnline;
+
+// =================== CLIENTES ===================
 export async function salvarClienteLocalEOnline(payload: Partial<Cliente>): Promise<Cliente> {
   const clienteFinal: Cliente = {
     id: payload.id || `cli-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -274,35 +189,19 @@ export async function salvarClienteLocalEOnline(payload: Partial<Cliente>): Prom
 
   await salvarItemLocal('clientes', clienteFinal);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch('/api/clientes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clienteFinal),
-      });
-
-      if (res.ok) {
-        const cliServidor = await res.json();
-        await salvarItemLocal('clientes', cliServidor);
-        synced = true;
-      }
-    } catch (err) {
-      console.warn('Conexão instável ao salvar cliente online, enfileirando:', err);
-    }
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: '/api/clientes',
+  try {
+    const res = await apiFetch('/api/clientes', {
       method: 'POST',
-      body: clienteFinal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clienteFinal),
     });
-    syncService.atualizarContadorPendentes();
-  }
+
+    if (res.ok) {
+      const cliServidor = await res.json();
+      await salvarItemLocal('clientes', cliServidor);
+      return cliServidor;
+    }
+  } catch {}
 
   return clienteFinal;
 }
@@ -310,99 +209,53 @@ export async function salvarClienteLocalEOnline(payload: Partial<Cliente>): Prom
 export async function removerClienteLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('clientes', id);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch(`/api/clientes?id=${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok || res.status === 404) synced = true;
-    } catch {}
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: `/api/clientes?id=${id}`,
+  try {
+    await apiFetch(`/api/clientes?id=${id}`, {
       method: 'DELETE',
     });
-    syncService.atualizarContadorPendentes();
-  }
+  } catch {}
 }
 
+export const excluirClienteLocalEOnline = removerClienteLocalEOnline;
+
+// =================== CREDIÁRIO / AMORTIZAÇÃO ===================
 export async function amortizarCrediarioLocalEOnline(body: {
   clienteId: string;
   valor: number;
   formaPagamento: string;
+  observacoes?: string;
   observacao?: string;
 }): Promise<void> {
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch('/api/crediario/amortizar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) synced = true;
-    } catch {}
+  try {
+    const clientesLocais = await obterItensLocais<Cliente>('clientes');
+    const cli = clientesLocais.find((c) => c.id === body.clienteId);
+    if (cli) {
+      cli.saldoDevedor = Math.max(0, Number(((Number(cli.saldoDevedor) || 0) - Number(body.valor)).toFixed(2)));
+      await salvarItemLocal('clientes', cli);
+    }
+  } catch (err) {
+    console.warn('Erro ao atualizar saldo do cliente localmente:', err);
   }
 
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: '/api/crediario/amortizar',
+  try {
+    await apiFetch('/api/crediario/amortizar', {
       method: 'POST',
-      body,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
-    syncService.atualizarContadorPendentes();
-  }
+  } catch {}
 }
 
-// =================== PEDIDOS (VENDAS NO PDV) ===================
+export const salvarAmortizacaoLocalEOnline = amortizarCrediarioLocalEOnline;
+
+// =================== PEDIDOS / VENDAS / ENCOMENDAS ===================
 export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-
-  // 1. Envio Direto Online (quando conectado)
-  if (isOnline) {
-    try {
-      const res = await apiFetch('/api/pedidos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        const pedidoCriado: Pedido = await res.json();
-        await salvarItemLocal('pedidos', pedidoCriado);
-
-        // Se for crediário, atualiza o saldo do cliente no armazenamento local imediatamente
-        if (pedidoCriado.formaPagamento === 'CREDIARIO' && pedidoCriado.clienteId) {
-          try {
-            const clientesLocais = await obterItensLocais<Cliente>('clientes');
-            const cli = clientesLocais.find((c) => c.id === pedidoCriado.clienteId);
-            if (cli) {
-              cli.saldoDevedor = Number(((Number(cli.saldoDevedor) || 0) + pedidoCriado.totalLiquido).toFixed(2));
-              await salvarItemLocal('clientes', cli);
-            }
-          } catch {}
-        }
-
-        return pedidoCriado;
-      }
-    } catch (netErr) {
-      console.warn('Conexão instável, usando salvamento offline:', netErr);
-    }
-  }
-
-  // 2. Modo Offline / Fallback de Rede
+  const agora = new Date().toISOString();
   const pedidoFinal: Pedido = {
     id: body.id || `ped-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    codigo: Math.floor(100 + Math.random() * 900),
-    dataVenda: new Date().toISOString(),
-    status: 'CONCLUIDO',
+    codigo: body.codigo || Math.floor(100 + Math.random() * 900),
+    dataVenda: body.dataVenda || agora,
+    status: body.status || 'CONCLUIDO',
     clienteId: body.clienteId,
     nomeClienteAvulso: body.nomeClienteAvulso,
     itens: body.itens || [],
@@ -423,7 +276,21 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
     statusProducao: body.statusProducao || (body.isEncomenda ? 'A_FAZER' : undefined),
   };
 
-  // Atualiza saldo do cliente localmente
+  // 1. Atualiza estoque no banco do celular
+  try {
+    const produtosLocais = await obterItensLocais<Produto>('produtos');
+    for (const item of pedidoFinal.itens) {
+      const prod = produtosLocais.find((p) => p.id === item.produtoId);
+      if (prod) {
+        prod.estoqueAtual = Math.max(0, (Number(prod.estoqueAtual) || 0) - item.quantidade);
+        await salvarItemLocal('produtos', prod);
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao atualizar estoque local:', err);
+  }
+
+  // 2. Se for crediário, atualiza saldo devedor do cliente localmente
   if (pedidoFinal.formaPagamento === 'CREDIARIO' && pedidoFinal.clienteId) {
     try {
       const clientesLocais = await obterItensLocais<Cliente>('clientes');
@@ -435,17 +302,23 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
     } catch {}
   }
 
-  // Grava no banco do celular na hora
+  // 3. Grava no banco do celular na hora
   await salvarItemLocal('pedidos', pedidoFinal);
 
-  // Enfileira para envio à nuvem com o MESMO ID para garantir idempotência
-  await enfileirarSincronizacao({
-    endpoint: '/api/pedidos',
-    method: 'POST',
-    body: { ...body, id: pedidoFinal.id, codigo: pedidoFinal.codigo, dataVenda: pedidoFinal.dataVenda },
-  });
+  // 4. Grava no disco rígido local do servidor
+  try {
+    const res = await apiFetch('/api/pedidos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, id: pedidoFinal.id, codigo: pedidoFinal.codigo, dataVenda: pedidoFinal.dataVenda }),
+    });
 
-  syncService.atualizarContadorPendentes();
+    if (res.ok) {
+      const pedServidor = await res.json();
+      await salvarItemLocal('pedidos', pedServidor);
+      return pedServidor;
+    }
+  } catch {}
 
   return pedidoFinal;
 }
@@ -465,80 +338,42 @@ export async function atualizarStatusProducaoLocalEOnline(
     console.warn('Erro ao atualizar status do pedido no IndexedDB:', err);
   }
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch(`/api/pedidos/${pedidoId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statusProducao }),
-      });
-      if (res.ok) synced = true;
-    } catch {}
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: `/api/pedidos/${pedidoId}`,
+  try {
+    await apiFetch(`/api/pedidos/${pedidoId}`, {
       method: 'PATCH',
-      body: { statusProducao },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ statusProducao }),
     });
-    syncService.atualizarContadorPendentes();
-  }
+  } catch {}
 }
 
 export async function cancelarPedidoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('pedidos', id);
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch(`/api/pedidos/${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok || res.status === 404) synced = true;
-    } catch {}
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: `/api/pedidos/${id}`,
+  try {
+    await apiFetch(`/api/pedidos/${id}`, {
       method: 'DELETE',
     });
-    syncService.atualizarContadorPendentes();
-  }
+  } catch {}
 }
 
 // =================== CONFIGURAÇÕES DA LOJA ===================
 export async function salvarConfigLocalEOnline(config: ConfiguracaoLoja): Promise<ConfiguracaoLoja> {
   await salvarItemLocal('configuracoes', { id: 'loja-config', ...config });
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  let synced = false;
-
-  if (isOnline) {
-    try {
-      const res = await apiFetch('/api/configuracoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      });
-      if (res.ok) synced = true;
-    } catch {}
-  }
-
-  if (!synced) {
-    await enfileirarSincronizacao({
-      endpoint: '/api/configuracoes',
+  try {
+    const res = await apiFetch('/api/configuracoes', {
       method: 'POST',
-      body: config,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
     });
-    syncService.atualizarContadorPendentes();
-  }
+
+    if (res.ok) {
+      const cfgServidor = await res.json();
+      await salvarItemLocal('configuracoes', { id: 'loja-config', ...cfgServidor });
+      return cfgServidor;
+    }
+  } catch {}
 
   return config;
 }

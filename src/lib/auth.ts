@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getLojaIdByToken } from './db';
+import { getLojaIdByToken, getLoja } from './db';
 
 const SALT = 'manu_erp_security_salt_2026';
 
@@ -22,9 +22,9 @@ export function gerarTokenSessao(): string {
  * 1. Header `x-loja-id`
  * 2. Header `Authorization: Bearer <token>`
  * 3. Cookie `erp_sessao_token`
- * 4. Query param `lojaId`
+ * 4. Fallback: Loja local padrão
  */
-export function extrairLojaId(request: Request): string | null {
+export function extrairLojaId(request: Request): string {
   // 1. Header direto x-loja-id
   const headerLojaId = request.headers.get('x-loja-id');
   if (headerLojaId) return headerLojaId;
@@ -52,5 +52,7 @@ export function extrairLojaId(request: Request): string | null {
     if (paramLojaId) return paramLojaId;
   } catch {}
 
-  return null;
+  // 5. Fallback automático para a loja do disco local
+  const loja = getLoja();
+  return loja.id;
 }

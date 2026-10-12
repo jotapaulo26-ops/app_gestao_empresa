@@ -12,11 +12,9 @@ import ReceitasView from '@/components/ReceitasView';
 import InsumosView from '@/components/InsumosView';
 import CategoriasView from '@/components/CategoriasView';
 import LojaConfigView from '@/components/LojaConfigView';
-import AuthView from '@/components/AuthView';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
 import { obterItensLocais, salvarItensLocais, obterFilaSincronizacao } from '@/lib/indexedDb';
-import { syncService } from '@/lib/syncService';
 import { calcularDashboardMetrics } from '@/lib/dashboardMetrics';
 
 interface SessaoState {
@@ -31,9 +29,20 @@ interface SessaoState {
   lojaId: string;
 }
 
+const SESSAO_PADRAO: SessaoState = {
+  usuario: {
+    id: 'user-local',
+    nome: 'Administrador',
+    email: 'local@erp.com',
+    lojaId: 'loja-local',
+    nomeLoja: 'Minha Loja',
+  },
+  token: 'token-local',
+  lojaId: 'loja-local',
+};
+
 export default function HomePage() {
-  const [sessao, setSessao] = useState<SessaoState | null>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [sessao, setSessao] = useState<SessaoState>(SESSAO_PADRAO);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('pdv');
   const [visitedTabs, setVisitedTabs] = useState<Set<ActiveTab>>(() => new Set<ActiveTab>(['pdv']));
@@ -186,105 +195,17 @@ export default function HomePage() {
       if (resDash && !resDash.error) setDashboardMetrics(resDash);
       if (resCfg && !resCfg.error) setConfigLoja(resCfg);
 
-      // Atualiza o contador de pendências sem sincronizar automaticamente
-      syncService.atualizarContadorPendentes();
     } catch (err) {
       console.warn('Modo offline ativo: usando dados salvos no celular.', err);
     } finally {
       setLoading(false);
     }
-  }, [sessao?.lojaId, sessao?.token]);
+  }, [sessao.lojaId, sessao.token]);
 
-  // Checagem de sessão salva e Restauração Imediata (Auto-login 0ms)
+  // Carrega imediatamente ao iniciar o app no disco local
   useEffect(() => {
-    const verificarSessao = async () => {
-      if (typeof window === 'undefined') return;
-
-      const tokenSalvo = localStorage.getItem('erp_usuario_token');
-      const lojaIdSalva = localStorage.getItem('erp_usuario_loja_id');
-      const dadosUsuarioSalvo = localStorage.getItem('erp_usuario_dados');
-
-      // 1. Auto-login Imediato se houver credenciais salvas no aparelho
-      if (tokenSalvo && lojaIdSalva) {
-        let usuario = null;
-        try {
-          usuario = dadosUsuarioSalvo ? JSON.parse(dadosUsuarioSalvo) : null;
-        } catch {}
-
-        if (!usuario) {
-          usuario = {
-            id: 'user-local',
-            nome: 'Lojista',
-            email: '',
-            lojaId: lojaIdSalva,
-            nomeLoja: 'Minha Loja',
-          };
-        }
-
-        const sessaoImediata: SessaoState = {
-          usuario,
-          token: tokenSalvo,
-          lojaId: lojaIdSalva,
-        };
-
-        setSessao(sessaoImediata);
-        setCheckingAuth(false);
-        loadAllData(lojaIdSalva, tokenSalvo);
-
-        // 2. Validação silenciosa na nuvem em segundo plano (não bloqueia a abertura)
-        try {
-          const res = await fetch('/api/auth/me', {
-            headers: { Authorization: `Bearer ${tokenSalvo}` },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.usuario) {
-              setSessao((prev) => (prev ? { ...prev, usuario: data.usuario } : prev));
-              localStorage.setItem('erp_usuario_dados', JSON.stringify(data.usuario));
-            }
-          }
-        } catch (errSync) {
-          // Em caso de falha de rede ou offline, continua no ERP com dados locais
-          console.log('Modo offline: sessão local preservada.');
-        }
-        return;
-      }
-
-      setCheckingAuth(false);
-    };
-
-    verificarSessao();
+    loadAllData();
   }, [loadAllData]);
-
-  const handleLoginSuccess = (dados: SessaoState) => {
-    setSessao(dados);
-    loadAllData(dados.lojaId, dados.token);
-  };
-
-  const handleLogout = async () => {
-    try {
-      const headers: Record<string, string> = {};
-      if (sessao?.token) {
-        headers['Authorization'] = `Bearer ${sessao.token}`;
-      }
-      await fetch('/api/auth/logout', { method: 'POST', headers });
-    } catch {}
-
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('erp_usuario_token');
-      localStorage.removeItem('erp_usuario_loja_id');
-      localStorage.removeItem('erp_usuario_dados');
-    }
-
-    setSessao(null);
-    setCategorias([]);
-    setInsumos([]);
-    setProdutos([]);
-    setClientes([]);
-    setPedidos([]);
-    setDashboardMetrics(null);
-    setConfigLoja(null);
-  };
 
   // Métricas do Dashboard calculadas 100% em TEMPO REAL (Chamada incondicional de Hook no topo)
   const realTimeDashboardMetrics = useMemo(() => {
@@ -295,33 +216,15 @@ export default function HomePage() {
     (realTimeDashboardMetrics?.insumosBaixos?.length || 0) +
     (realTimeDashboardMetrics?.produtosBaixos?.length || 0);
 
-  // Se ainda estiver validando a sessão no primeiro load
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-black text-slate-100 flex items-center justify-center font-sans">
-        <div className="text-center space-y-3">
-          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto shadow-[0_0_20px_rgba(0,255,136,0.4)]" />
-          <p className="text-zinc-500 font-mono text-xs">Inicializando ERP Dark Neon...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Se não estiver logado, exibe a tela de Login & Cadastro
-  if (!sessao) {
-    return <AuthView onLoginSuccess={handleLoginSuccess} />;
-  }
-
   return (
     <div className="min-h-screen bg-black text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
-      {/* Top Header & Bottom Thumb Nav com Botão de Sair */}
+      {/* Top Header & Bottom Thumb Nav */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={handleSelectTab}
         alertasEstoque={totalAlertasEstoque}
-        nomeLoja={configLoja?.nomeLoja || sessao?.usuario?.nomeLoja || 'Minha Loja'}
-        nomeUsuario={sessao?.usuario?.nome || 'Operador'}
-        onLogout={handleLogout}
+        nomeLoja={configLoja?.nomeLoja || sessao.usuario.nomeLoja || 'Minha Loja'}
+        nomeUsuario={sessao.usuario.nome || 'Administrador'}
       />
 
       {/* Conteúdo Focado 100% no Módulo Ativo da Loja com Keep-Alive 0ms */}

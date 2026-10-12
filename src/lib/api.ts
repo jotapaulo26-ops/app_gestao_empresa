@@ -6,13 +6,13 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   const headers = new Headers(init?.headers || {});
 
   if (typeof window !== 'undefined') {
-    const lojaId = localStorage.getItem('erp_usuario_loja_id');
-    const token = localStorage.getItem('erp_usuario_token');
+    const lojaId = localStorage.getItem('erp_usuario_loja_id') || 'loja-padrao';
+    const token = localStorage.getItem('erp_usuario_token') || 'token-local';
 
-    if (lojaId && !headers.has('x-loja-id')) {
+    if (!headers.has('x-loja-id')) {
       headers.set('x-loja-id', lojaId);
     }
-    if (token && !headers.has('Authorization')) {
+    if (!headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
     }
   }
