@@ -28,7 +28,7 @@ export default function PedidosView({ pedidos, clientes, config, onRefresh }: Pe
   const [errorMsg, setErrorMsg] = useState('');
 
   const filteredPedidos = (pedidos || []).filter((p) => {
-    if (!p) return false;
+    if (!p || p.status === 'CANCELADO') return false;
     const codStr = p.codigo != null ? p.codigo.toString() : '';
     const matchCod = codStr.includes(search);
     const cli = (clientes || []).find((c) => c && c.id === p.clienteId);

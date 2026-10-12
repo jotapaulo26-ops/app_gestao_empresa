@@ -5,12 +5,15 @@ import Navbar, { ActiveTab } from '@/components/Navbar';
 import DashboardView from '@/components/DashboardView';
 import PDVView from '@/components/PDVView';
 import PedidosView from '@/components/PedidosView';
+import EncomendasView from '@/components/EncomendasView';
 import CrediarioView from '@/components/CrediarioView';
 import ProdutosView from '@/components/ProdutosView';
+import ReceitasView from '@/components/ReceitasView';
 import InsumosView from '@/components/InsumosView';
 import CategoriasView from '@/components/CategoriasView';
 import LojaConfigView from '@/components/LojaConfigView';
 import AuthView from '@/components/AuthView';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
 import { obterItensLocais, salvarItensLocais, obterFilaSincronizacao } from '@/lib/indexedDb';
 import { syncService } from '@/lib/syncService';
@@ -33,6 +36,17 @@ export default function HomePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('pdv');
+  const [visitedTabs, setVisitedTabs] = useState<Set<ActiveTab>>(() => new Set<ActiveTab>(['pdv']));
+
+  const handleSelectTab = useCallback((tab: ActiveTab) => {
+    setActiveTab(tab);
+    setVisitedTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  }, []);
   
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
@@ -107,8 +121,8 @@ export default function HomePage() {
         const mapa = new Map<string, Categoria>();
         resCat.forEach((c) => mapa.set(c.id, c));
         localCat.forEach((c) => {
-          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(c.id));
-          if (!mapa.has(c.id) && !deletado) mapa.set(c.id, c);
+          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === c.id || t.endpoint === '/api/categorias'));
+          if (!mapa.has(c.id) && pendente) mapa.set(c.id, c);
         });
         const finalCat = Array.from(mapa.values());
         setCategorias(finalCat);
@@ -120,8 +134,8 @@ export default function HomePage() {
         const mapa = new Map<string, Insumo>();
         resIns.forEach((i) => mapa.set(i.id, i));
         localIns.forEach((i) => {
-          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(i.id));
-          if (!mapa.has(i.id) && !deletado) mapa.set(i.id, i);
+          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === i.id || t.endpoint === '/api/insumos'));
+          if (!mapa.has(i.id) && pendente) mapa.set(i.id, i);
         });
         const finalIns = Array.from(mapa.values());
         setInsumos(finalIns);
@@ -133,8 +147,8 @@ export default function HomePage() {
         const mapa = new Map<string, Produto>();
         resProd.forEach((p) => mapa.set(p.id, p));
         localProd.forEach((p) => {
-          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(p.id));
-          if (!mapa.has(p.id) && !deletado) mapa.set(p.id, p);
+          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === p.id || t.endpoint === '/api/produtos'));
+          if (!mapa.has(p.id) && pendente) mapa.set(p.id, p);
         });
         const finalProd = Array.from(mapa.values());
         setProdutos(finalProd);
@@ -146,21 +160,21 @@ export default function HomePage() {
         const mapa = new Map<string, Cliente>();
         resCli.forEach((c) => mapa.set(c.id, c));
         localCli.forEach((c) => {
-          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(c.id));
-          if (!mapa.has(c.id) && !deletado) mapa.set(c.id, c);
+          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === c.id || t.endpoint === '/api/clientes'));
+          if (!mapa.has(c.id) && pendente) mapa.set(c.id, c);
         });
         const finalCli = Array.from(mapa.values());
         setClientes(finalCli);
         salvarItensLocais('clientes', finalCli);
       }
 
-      // Pedidos - Mesclagem inteligente
+      // Pedidos - Mesclagem inteligente (excluindo cancelados)
       if (Array.isArray(resPed)) {
         const mapa = new Map<string, Pedido>();
-        resPed.forEach((p) => mapa.set(p.id, p));
-        localPed.forEach((p) => {
-          const deletado = filaPendentes.some((t) => t.method === 'DELETE' && t.endpoint.includes(p.id));
-          if (!mapa.has(p.id) && !deletado) mapa.set(p.id, p);
+        resPed.filter((p) => p && p.status !== 'CANCELADO').forEach((p) => mapa.set(p.id, p));
+        localPed.filter((p) => p && p.status !== 'CANCELADO').forEach((p) => {
+          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === p.id || t.endpoint === '/api/pedidos'));
+          if (!mapa.has(p.id) && pendente) mapa.set(p.id, p);
         });
         const finalPed = Array.from(mapa.values()).sort(
           (a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime()
@@ -172,8 +186,8 @@ export default function HomePage() {
       if (resDash && !resDash.error) setDashboardMetrics(resDash);
       if (resCfg && !resCfg.error) setConfigLoja(resCfg);
 
-      // Dispara o background sync para enviar qualquer pendência do celular
-      syncService.processarFila();
+      // Atualiza o contador de pendências sem sincronizar automaticamente
+      syncService.atualizarContadorPendentes();
     } catch (err) {
       console.warn('Modo offline ativo: usando dados salvos no celular.', err);
     } finally {
@@ -303,14 +317,14 @@ export default function HomePage() {
       {/* Top Header & Bottom Thumb Nav com Botão de Sair */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleSelectTab}
         alertasEstoque={totalAlertasEstoque}
         nomeLoja={configLoja?.nomeLoja || sessao?.usuario?.nomeLoja || 'Minha Loja'}
         nomeUsuario={sessao?.usuario?.nome || 'Operador'}
         onLogout={handleLogout}
       />
 
-      {/* Conteúdo Focado 100% no Módulo Ativo da Loja */}
+      {/* Conteúdo Focado 100% no Módulo Ativo da Loja com Keep-Alive 0ms */}
       <main className="flex-1 pb-20">
         {loading ? (
           <div className="max-w-md mx-auto px-4 py-24 text-center">
@@ -319,72 +333,132 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            {activeTab === 'pdv' && (
-              <PDVView
-                categorias={categorias}
-                produtos={produtos}
-                clientes={clientes}
-                config={configLoja || undefined}
-                onOrderCompleted={async () => {
-                  await loadAllData();
-                }}
-              />
+            {visitedTabs.has('pdv') && (
+              <div style={{ display: activeTab === 'pdv' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="PDV Caixa Rápido">
+                  <PDVView
+                    categorias={categorias}
+                    produtos={produtos}
+                    clientes={clientes}
+                    config={configLoja || undefined}
+                    onOrderCompleted={async () => {
+                      await loadAllData();
+                    }}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-            {activeTab === 'dashboard' && (
-              <DashboardView
-                metrics={realTimeDashboardMetrics}
-                setActiveTab={setActiveTab}
-              />
+            {visitedTabs.has('dashboard') && (
+              <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Dashboard Analítico">
+                  <DashboardView
+                    metrics={realTimeDashboardMetrics}
+                    setActiveTab={handleSelectTab}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-            {activeTab === 'crediario' && (
-              <CrediarioView
-                clientes={clientes}
-                pedidos={pedidos}
-                config={configLoja || undefined}
-                onRefresh={() => loadAllData()}
-              />
+            {visitedTabs.has('crediario') && (
+              <div style={{ display: activeTab === 'crediario' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Crediário & Clientes">
+                  <CrediarioView
+                    clientes={clientes}
+                    pedidos={pedidos}
+                    config={configLoja || undefined}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-            {activeTab === 'pedidos' && (
-              <PedidosView
-                pedidos={pedidos}
-                clientes={clientes}
-                config={configLoja || undefined}
-                onRefresh={() => loadAllData()}
-              />
+            {visitedTabs.has('pedidos') && (
+              <div style={{ display: activeTab === 'pedidos' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Vendas & Cobranças">
+                  <PedidosView
+                    pedidos={pedidos}
+                    clientes={clientes}
+                    config={configLoja || undefined}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-            {activeTab === 'produtos' && (
-              <ProdutosView
-                produtos={produtos}
-                categorias={categorias}
-                insumos={insumos}
-                onRefresh={() => loadAllData()}
-              />
+            {visitedTabs.has('encomendas') && (
+              <div style={{ display: activeTab === 'encomendas' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Agenda de Encomendas & Produção">
+                  <EncomendasView
+                    pedidos={pedidos}
+                    clientes={clientes}
+                    produtos={produtos}
+                    config={configLoja || undefined}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-            {activeTab === 'insumos' && (
-              <InsumosView
-                insumos={insumos}
-                onRefresh={() => loadAllData()}
-              />
+            {visitedTabs.has('produtos') && (
+              <div style={{ display: activeTab === 'produtos' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Produtos & Custos">
+                  <ProdutosView
+                    produtos={produtos}
+                    categorias={categorias}
+                    insumos={insumos}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-            {activeTab === 'categorias' && (
-              <CategoriasView
-                categorias={categorias}
-                produtos={produtos}
-                onRefresh={() => loadAllData()}
-              />
+            {visitedTabs.has('receitas') && (
+              <div style={{ display: activeTab === 'receitas' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Livro de Receitas & Fichas">
+                  <ReceitasView
+                    produtos={produtos}
+                    categorias={categorias}
+                    insumos={insumos}
+                    config={configLoja || undefined}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-            {activeTab === 'loja' && (
-              <LojaConfigView
-                config={configLoja || undefined}
-                onRefresh={() => loadAllData()}
-              />
+            {visitedTabs.has('insumos') && (
+              <div style={{ display: activeTab === 'insumos' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Estoque de Insumos">
+                  <InsumosView
+                    insumos={insumos}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
+            )}
+
+            {visitedTabs.has('categorias') && (
+              <div style={{ display: activeTab === 'categorias' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Categorias">
+                  <CategoriasView
+                    categorias={categorias}
+                    produtos={produtos}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
+            )}
+
+            {visitedTabs.has('loja') && (
+              <div style={{ display: activeTab === 'loja' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Configurações da Loja">
+                  <LojaConfigView
+                    config={configLoja || undefined}
+                    onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
           </>
         )}

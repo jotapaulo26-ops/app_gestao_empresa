@@ -72,16 +72,25 @@ export default function ProdutosView({
   const [custoDireto, setCustoDireto] = useState('');
   const [mostrarCalculadora, setMostrarCalculadora] = useState(false);
 
-  // Ficha Técnica & Calculadora Avançada
-  const [rendimentoReceita, setRendimentoReceita] = useState<number>(1);
-  const [custoEmbalagem, setCustoEmbalagem] = useState<number>(0);
-  const [custoMaoDeObra, setCustoMaoDeObra] = useState<number>(0);
-  const [custoGasEnergia, setCustoGasEnergia] = useState<number>(0);
-  const [margemLucroPct, setMargemLucroPct] = useState<number>(100);
-  const [fichaTecnica, setFichaTecnica] = useState<ItemFichaTecnica[]>([]);
+  // Ficha Técnica & Calculadora Avançada com Suporte a Decimais Quebrados
+  const [rendimentoReceita, setRendimentoReceita] = useState<string>('1');
+  const [custoEmbalagem, setCustoEmbalagem] = useState<string>('0');
+  const [custoMaoDeObra, setCustoMaoDeObra] = useState<string>('0');
+  const [custoGasEnergia, setCustoGasEnergia] = useState<string>('0');
+  const [margemLucroPct, setMargemLucroPct] = useState<string>('100');
+  const [fichaTecnica, setFichaTecnica] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Auxiliar para converter texto (vírgula ou ponto) em número decimal preciso
+  const parsePtBrFloat = (val: string | number | undefined | null): number => {
+    if (val === undefined || val === null) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const s = val.toString().trim().replace(',', '.');
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  };
 
   // Unidades com conversão automática inteligente
   const getOpcoesUnidade = (insumoUnidade?: string) => {
@@ -103,7 +112,7 @@ export default function ProdutosView({
 
   // 1. CUSTO TOTAL DOS INSUMOS DA RECEITA INTEIRA
   const custoInsumosReceita = useMemo(() => {
-    if (tipo === 'REVENDA') return Number(custoDireto) || 0;
+    if (tipo === 'REVENDA') return parsePtBrFloat(custoDireto);
     const safeFicha = Array.isArray(fichaTecnica) ? fichaTecnica : [];
     const safeInsumos = Array.isArray(insumos) ? insumos : [];
     return safeFicha.reduce((acc, item) => {
@@ -116,44 +125,49 @@ export default function ProdutosView({
         else if (ins.unidade === 'l' && item.unidadeUso === 'ml') fator = 0.001;
         else if (ins.unidade === 'ml' && item.unidadeUso === 'l') fator = 1000;
       }
-      return acc + (Number(ins.custoUnitario) || 0) * ((Number(item.quantidade) || 0) * fator);
+      const qtd = parsePtBrFloat(item.quantidade);
+      return acc + (Number(ins.custoUnitario) || 0) * (qtd * fator);
     }, 0);
   }, [tipo, custoDireto, fichaTecnica, insumos]);
 
-  // 2. RENDIMENTO DO LOTE (quantidade de unidades produzidas)
-  const rendimento = Math.max(1, Number(rendimentoReceita) || 1);
+  // 2. RENDIMENTO DO LOTE (quantidade de unidades produzidas - suporte a decimais como 0,250 ou 1,82)
+  const rendimento = useMemo(() => {
+    const val = parsePtBrFloat(rendimentoReceita);
+    return Math.max(0.0001, val > 0 ? val : 1);
+  }, [rendimentoReceita]);
 
   // 3. CUSTO DE INSUMOS POR UNIDADE
   const custoUnitarioInsumos = useMemo(() => {
-    if (tipo === 'REVENDA') return Number(custoDireto) || 0;
+    if (tipo === 'REVENDA') return parsePtBrFloat(custoDireto);
     return Number((custoInsumosReceita / rendimento).toFixed(2));
   }, [tipo, custoDireto, custoInsumosReceita, rendimento]);
 
   // 4. RATEIO DE MÃO DE OBRA E GÁS/ENERGIA POR UNIDADE
   const rateioLotePorUnidade = useMemo(() => {
     if (tipo === 'REVENDA') return 0;
-    const totalExtrasLote = (Number(custoMaoDeObra) || 0) + (Number(custoGasEnergia) || 0);
+    const totalExtrasLote = parsePtBrFloat(custoMaoDeObra) + parsePtBrFloat(custoGasEnergia);
     return Number((totalExtrasLote / rendimento).toFixed(2));
   }, [tipo, custoMaoDeObra, custoGasEnergia, rendimento]);
 
   // 5. CUSTO TOTAL DE 1 UNIDADE PRONTA
   const custoTotalUnitario = useMemo(() => {
-    if (tipo === 'REVENDA') return Number(custoDireto) || 0;
-    return Number((custoUnitarioInsumos + rateioLotePorUnidade + (Number(custoEmbalagem) || 0)).toFixed(2));
+    if (tipo === 'REVENDA') return parsePtBrFloat(custoDireto);
+    return Number((custoUnitarioInsumos + rateioLotePorUnidade + parsePtBrFloat(custoEmbalagem)).toFixed(2));
   }, [tipo, custoDireto, custoUnitarioInsumos, rateioLotePorUnidade, custoEmbalagem]);
 
   // 6. PREÇO DE VENDA SUGERIDO PELA MARGEM PROGRAMADA
   const precoVendaSugerido = useMemo(() => {
     if (custoTotalUnitario > 0) {
-      return Number((custoTotalUnitario * (1 + (Number(margemLucroPct) || 0) / 100)).toFixed(2));
+      const margem = parsePtBrFloat(margemLucroPct);
+      return Number((custoTotalUnitario * (1 + margem / 100)).toFixed(2));
     }
     return 0;
   }, [custoTotalUnitario, margemLucroPct]);
 
   // 7. PREÇO FINAL DEFINIDO (Digitado ou Sugerido)
   const precoVendaFinal = useMemo(() => {
-    const direto = parseFloat(precoVendaDireto);
-    if (!isNaN(direto) && direto > 0) return direto;
+    const direto = parsePtBrFloat(precoVendaDireto);
+    if (direto > 0) return direto;
     return precoVendaSugerido > 0 ? precoVendaSugerido : 0;
   }, [precoVendaDireto, precoVendaSugerido]);
 
@@ -189,11 +203,11 @@ export default function ProdutosView({
     setPrecoVendaDireto('');
     setCustoDireto('');
     setMostrarCalculadora(true);
-    setRendimentoReceita(1);
-    setMargemLucroPct(100);
-    setCustoEmbalagem(0);
-    setCustoMaoDeObra(0);
-    setCustoGasEnergia(0);
+    setRendimentoReceita('1');
+    setMargemLucroPct('100');
+    setCustoEmbalagem('0');
+    setCustoMaoDeObra('0');
+    setCustoGasEnergia('0');
     setFichaTecnica([]);
     setErrorMsg('');
     setModalOpen(true);
@@ -210,11 +224,11 @@ export default function ProdutosView({
     setPrecoVendaDireto(produto.precoVenda ? produto.precoVenda.toString() : '');
     setCustoDireto(produto.custoInsumos ? produto.custoInsumos.toString() : '');
     setMostrarCalculadora(produto.tipo === 'FABRICADO');
-    setRendimentoReceita(produto.rendimentoReceita || 1);
-    setMargemLucroPct(produto.margemLucroPct || 100);
-    setCustoEmbalagem(produto.custoEmbalagem || 0);
-    setCustoMaoDeObra(produto.custoMaoDeObra || 0);
-    setCustoGasEnergia(produto.custoGasEnergia || 0);
+    setRendimentoReceita((produto.rendimentoReceita || 1).toString());
+    setMargemLucroPct((produto.margemLucroPct || 100).toString());
+    setCustoEmbalagem((produto.custoEmbalagem || 0).toString());
+    setCustoMaoDeObra((produto.custoMaoDeObra || 0).toString());
+    setCustoGasEnergia((produto.custoGasEnergia || 0).toString());
     setFichaTecnica(Array.isArray(produto.fichaTecnica) ? [...produto.fichaTecnica] : []);
     setErrorMsg('');
     setModalOpen(true);
@@ -242,7 +256,7 @@ export default function ProdutosView({
   const handleUpdateItemReceita = (
     index: number,
     insumoId: string,
-    quantidade: number,
+    quantidade: number | string,
     unidadeUso?: string,
     fatorConversao?: number
   ) => {
@@ -254,7 +268,7 @@ export default function ProdutosView({
         const opt = opcoes.find((o) => o.valor === unidadeUso) || opcoes[0];
         return {
           insumoId,
-          quantidade: Math.max(0, quantidade),
+          quantidade,
           unidadeUso: unidadeUso || opt.valor,
           fatorConversao: fatorConversao !== undefined ? fatorConversao : opt.fator,
         };
@@ -292,15 +306,25 @@ export default function ProdutosView({
         estoqueAtual: Number(estoqueAtual) || 0,
         estoqueMinimo: Number(estoqueMinimo) || 2,
         rendimentoReceita: tipo === 'FABRICADO' ? rendimento : 1,
-        custoInsumos: tipo === 'FABRICADO' ? Number(custoInsumosReceita.toFixed(2)) : (Number(custoDireto) || 0),
-        custoUnitarioInsumos: tipo === 'FABRICADO' ? custoUnitarioInsumos : (Number(custoDireto) || 0),
-        custoEmbalagem: tipo === 'FABRICADO' ? Number(custoEmbalagem) || 0 : 0,
-        custoMaoDeObra: tipo === 'FABRICADO' ? Number(custoMaoDeObra) || 0 : 0,
-        custoGasEnergia: tipo === 'FABRICADO' ? Number(custoGasEnergia) || 0 : 0,
+        custoInsumos: tipo === 'FABRICADO' ? Number(custoInsumosReceita.toFixed(2)) : parsePtBrFloat(custoDireto),
+        custoUnitarioInsumos: tipo === 'FABRICADO' ? custoUnitarioInsumos : parsePtBrFloat(custoDireto),
+        custoEmbalagem: tipo === 'FABRICADO' ? parsePtBrFloat(custoEmbalagem) : 0,
+        custoMaoDeObra: tipo === 'FABRICADO' ? parsePtBrFloat(custoMaoDeObra) : 0,
+        custoGasEnergia: tipo === 'FABRICADO' ? parsePtBrFloat(custoGasEnergia) : 0,
         custoTotal: custoTotalUnitario,
-        margemLucroPct: Number(margemLucroPct) || 100,
+        margemLucroPct: parsePtBrFloat(margemLucroPct) || 100,
         precoVenda: Number(precoFinalSalvar.toFixed(2)),
-        fichaTecnica: tipo === 'FABRICADO' ? fichaTecnica : [],
+        modoPreparo: editingProduto?.modoPreparo || '',
+        tempoPreparo: editingProduto?.tempoPreparo || '',
+        validadeConservacao: editingProduto?.validadeConservacao || '',
+        fichaTecnica: tipo === 'FABRICADO'
+          ? fichaTecnica.map((ft) => ({
+              insumoId: ft.insumoId,
+              quantidade: parsePtBrFloat(ft.quantidade),
+              unidadeUso: ft.unidadeUso,
+              fatorConversao: ft.fatorConversao,
+            }))
+          : [],
       };
 
       await salvarProdutoLocalEOnline(payload);
@@ -757,30 +781,30 @@ export default function ProdutosView({
 
                     <div className="flex items-center gap-2 pt-1">
                       <input
-                        type="number"
-                        min="1"
-                        step="1"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Ex: 0,250 ou 1,82"
                         value={rendimentoReceita}
-                        onChange={(e) => setRendimentoReceita(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-24 text-center text-sm font-black py-2 bg-black border border-purple-500/60 rounded-xl text-purple-300 font-mono focus:outline-none"
+                        onChange={(e) => setRendimentoReceita(e.target.value)}
+                        className="w-28 text-center text-sm font-black py-2 bg-black border border-purple-500/60 rounded-xl text-purple-300 font-mono focus:outline-none focus:border-purple-400"
                       />
                       <span className="text-xs font-bold text-white">unidades por receita</span>
                     </div>
 
                     {/* Presets Rápidos */}
                     <div className="flex gap-1.5 pt-1 flex-wrap">
-                      {[1, 6, 12, 25, 30, 50, 100].map((preset) => (
+                      {[0.25, 0.5, 1, 6, 12, 25, 30, 50, 100].map((preset) => (
                         <button
                           key={preset}
                           type="button"
-                          onClick={() => setRendimentoReceita(preset)}
+                          onClick={() => setRendimentoReceita(preset.toString().replace('.', ','))}
                           className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
-                            rendimentoReceita === preset
+                            rendimento === preset
                               ? 'bg-purple-500 text-black font-black'
                               : 'bg-zinc-800 text-zinc-400 hover:text-white'
                           }`}
                         >
-                          {preset} un
+                          {preset.toString().replace('.', ',')} un
                         </button>
                       ))}
                     </div>
@@ -811,7 +835,8 @@ export default function ProdutosView({
                           const insumo = insumos.find((i) => i.id === item.insumoId);
                           const opcoes = getOpcoesUnidade(insumo?.unidade);
                           const fatorAtual = item.fatorConversao ?? (opcoes.find((o) => o.valor === item.unidadeUso)?.fator ?? 1);
-                          const custoTotalIngrediente = insumo ? (insumo.custoUnitario * (item.quantidade * fatorAtual)) : 0;
+                          const qtdNum = parsePtBrFloat(item.quantidade);
+                          const custoTotalIngrediente = insumo ? (insumo.custoUnitario * (qtdNum * fatorAtual)) : 0;
                           const custoPorDoce = custoTotalIngrediente / rendimento;
 
                           return (
@@ -841,21 +866,20 @@ export default function ProdutosView({
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-1.5 flex-1">
                                   <input
-                                    type="number"
-                                    step="any"
-                                    min="0.001"
-                                    placeholder="Qtd"
-                                    value={item.quantidade}
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="Qtd (ex: 0,250)"
+                                    value={item.quantidade !== undefined ? item.quantidade : ''}
                                     onChange={(e) =>
                                       handleUpdateItemReceita(
                                         idx,
                                         item.insumoId,
-                                        parseFloat(e.target.value) || 0,
+                                        e.target.value,
                                         item.unidadeUso,
                                         item.fatorConversao
                                       )
                                     }
-                                    className="w-16 p-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white font-bold text-center text-xs focus:outline-none"
+                                    className="w-20 p-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white font-mono font-bold text-center text-xs focus:outline-none focus:border-cyan-400"
                                   />
                                   <select
                                     value={item.unidadeUso || opcoes[0].valor}
@@ -906,13 +930,12 @@ export default function ProdutosView({
                           Embalagem (p/ un)
                         </label>
                         <input
-                          type="number"
-                          step="0.05"
-                          min="0"
-                          placeholder="0.00"
-                          value={custoEmbalagem || ''}
-                          onChange={(e) => setCustoEmbalagem(Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="w-full text-xs p-1.5 bg-black border border-zinc-800 rounded-lg text-white font-mono text-center focus:outline-none"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          value={custoEmbalagem}
+                          onChange={(e) => setCustoEmbalagem(e.target.value)}
+                          className="w-full text-xs p-1.5 bg-black border border-zinc-800 rounded-lg text-white font-mono text-center focus:outline-none focus:border-amber-400"
                         />
                         <span className="text-[8px] text-zinc-500 block text-center mt-0.5">pote / forminha</span>
                       </div>
@@ -922,13 +945,12 @@ export default function ProdutosView({
                           Gás / Energia (Lote)
                         </label>
                         <input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          placeholder="0.00"
-                          value={custoGasEnergia || ''}
-                          onChange={(e) => setCustoGasEnergia(Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="w-full text-xs p-1.5 bg-black border border-zinc-800 rounded-lg text-white font-mono text-center focus:outline-none"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          value={custoGasEnergia}
+                          onChange={(e) => setCustoGasEnergia(e.target.value)}
+                          className="w-full text-xs p-1.5 bg-black border border-zinc-800 rounded-lg text-white font-mono text-center focus:outline-none focus:border-amber-400"
                         />
                         <span className="text-[8px] text-zinc-500 block text-center mt-0.5">da receita</span>
                       </div>
@@ -938,13 +960,12 @@ export default function ProdutosView({
                           Mão de Obra (Lote)
                         </label>
                         <input
-                          type="number"
-                          step="1"
-                          min="0"
-                          placeholder="0.00"
-                          value={custoMaoDeObra || ''}
-                          onChange={(e) => setCustoMaoDeObra(Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="w-full text-xs p-1.5 bg-black border border-zinc-800 rounded-lg text-white font-mono text-center focus:outline-none"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          value={custoMaoDeObra}
+                          onChange={(e) => setCustoMaoDeObra(e.target.value)}
+                          className="w-full text-xs p-1.5 bg-black border border-zinc-800 rounded-lg text-white font-mono text-center focus:outline-none focus:border-amber-400"
                         />
                         <span className="text-[8px] text-zinc-500 block text-center mt-0.5">da receita</span>
                       </div>
@@ -965,11 +986,11 @@ export default function ProdutosView({
                       <span className="text-zinc-400">Margem Sugerida (%):</span>
                       <div className="flex items-center gap-1.5">
                         <input
-                          type="number"
-                          step="5"
+                          type="text"
+                          inputMode="decimal"
                           value={margemLucroPct}
-                          onChange={(e) => setMargemLucroPct(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-16 text-center text-xs py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-purple-300 font-bold font-mono focus:outline-none"
+                          onChange={(e) => setMargemLucroPct(e.target.value)}
+                          className="w-16 text-center text-xs py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-purple-300 font-bold font-mono focus:outline-none focus:border-purple-400"
                         />
                         <span className="text-zinc-500 text-xs">%</span>
                       </div>
@@ -983,7 +1004,7 @@ export default function ProdutosView({
                         </span>
                         <button
                           type="button"
-                          onClick={() => setPrecoVendaDireto(precoVendaSugerido.toFixed(2))}
+                          onClick={() => setPrecoVendaDireto(precoVendaSugerido.toFixed(2).replace('.', ','))}
                           className="py-1 px-2.5 bg-purple-500 text-black font-black rounded-lg text-[10px] active:scale-95"
                         >
                           Usar Sugerido
@@ -1006,11 +1027,10 @@ export default function ProdutosView({
                 <div className="relative">
                   <span className="absolute left-3.5 top-2.5 text-zinc-500 font-black text-sm">R$</span>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
+                    type="text"
+                    inputMode="decimal"
                     required
-                    placeholder="0.00"
+                    placeholder="0,00"
                     value={precoVendaDireto}
                     onChange={(e) => setPrecoVendaDireto(e.target.value)}
                     className="w-full text-base font-black pl-10 pr-4 py-2.5 bg-black border border-emerald-500/80 rounded-xl text-emerald-300 font-mono focus:outline-none focus:border-emerald-400 shadow-[0_0_15px_rgba(0,255,136,0.2)]"

@@ -45,6 +45,9 @@ export interface Produto {
   fichaTecnica: ItemFichaTecnica[]; // Presente quando tipo == 'FABRICADO'
   imagemUrl?: string;
   descricao?: string;
+  modoPreparo?: string; // Instruções / Passo a passo da receita
+  tempoPreparo?: string; // Ex: "45 min", "1h 30m"
+  validadeConservacao?: string; // Ex: "5 dias refrigerado"
 }
 
 export interface Cliente {
@@ -69,11 +72,14 @@ export interface ItemPedido {
 
 export type FormaPagamento = 'DINHEIRO' | 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'CREDIARIO';
 
+export type StatusProducao = 'A_FAZER' | 'EM_PRODUCAO' | 'PRONTO' | 'ENTREGUE';
+
 export interface Pedido {
   id: string;
   codigo: number;
   clienteId?: string;
   nomeClienteAvulso?: string;
+  telefoneClienteAvulso?: string;
   itens: ItemPedido[];
   totalBruto: number;
   desconto: number;
@@ -84,6 +90,14 @@ export interface Pedido {
   status: 'CONCLUIDO' | 'CANCELADO';
   dataVenda: string; // ISO string
   observacoes?: string;
+  // Campos de Encomenda & Agenda de Produção
+  isEncomenda?: boolean;
+  dataEntrega?: string; // "YYYY-MM-DD" ou ISO
+  horaEntrega?: string; // "15:00"
+  tipoEntrega?: 'RETIRADA' | 'ENTREGA';
+  enderecoEntrega?: string;
+  observacoesEntrega?: string;
+  statusProducao?: StatusProducao;
 }
 
 export interface PagamentoCrediario {

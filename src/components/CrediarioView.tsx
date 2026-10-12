@@ -15,6 +15,7 @@ import {
   Printer,
   Check,
   FileText,
+  MapPin,
 } from 'lucide-react';
 import CobrancaPdfModal from './CobrancaPdfModal';
 import { apiFetch } from '@/lib/api';
@@ -238,6 +239,12 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
                       <Phone className="w-3 h-3 text-emerald-400" /> {cli.telefone}
                     </span>
                   )}
+                  {cli.endereco && (
+                    <span className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3 text-pink-400 shrink-0" />
+                      <span className="truncate">{cli.endereco}</span>
+                    </span>
+                  )}
                 </div>
 
                 <span
@@ -369,6 +376,17 @@ export default function CrediarioView({ clientes, pedidos = [], config, onRefres
                   value={formData.telefone}
                   onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                   className="w-full text-xs p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-400 mb-1">Endereço Residencial / Comercial</label>
+                <input
+                  type="text"
+                  placeholder="Rua, número, bairro ou referência..."
+                  value={formData.endereco}
+                  onChange={(e) => setFormData({ ...formData, endereco: e.target.value })}
+                  className="w-full text-xs p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
 

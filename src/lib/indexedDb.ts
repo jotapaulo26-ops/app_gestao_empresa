@@ -6,7 +6,7 @@
 export interface SyncTask {
   id: string;
   endpoint: string;
-  method: 'POST' | 'PUT' | 'DELETE';
+  method: 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: any;
   timestamp: number;
   tentativas: number;

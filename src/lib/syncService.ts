@@ -21,9 +21,7 @@ class SyncService {
   constructor() {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
-        this.status = 'PENDENTE';
-        this.notificar();
-        this.processarFila();
+        this.atualizarContadorPendentes();
       });
 
       window.addEventListener('offline', () => {
@@ -31,24 +29,37 @@ class SyncService {
         this.notificar();
       });
 
-      // Checa a cada 20 segundos
-      this.timer = setInterval(() => {
-        this.processarFila();
-      }, 20000);
-
-      // Executa checagem inicial após carregamento
+      // Checa pendências locais na inicialização sem disparar sincronização automática
       setTimeout(() => {
-        this.processarFila();
-      }, 2000);
+        this.atualizarContadorPendentes();
+      }, 1000);
     }
   }
 
   public subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
-    listener(this.status, 0, this.ultimoBackup);
+    this.atualizarContadorPendentes();
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  public async atualizarContadorPendentes(): Promise<number> {
+    if (typeof window === 'undefined') return 0;
+    try {
+      const fila = await obterFilaSincronizacao();
+      if (!navigator.onLine) {
+        this.status = 'OFFLINE';
+      } else if (fila.length > 0) {
+        this.status = 'PENDENTE';
+      } else {
+        this.status = 'SINCRONIZADO';
+      }
+      this.notificar(fila.length);
+      return fila.length;
+    } catch {
+      return 0;
+    }
   }
 
   private notificar(pendentes: number = 0) {

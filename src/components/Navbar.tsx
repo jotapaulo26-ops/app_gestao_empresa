@@ -15,11 +15,13 @@ import {
   Sparkles,
   ChevronUp,
   LogOut,
+  ChefHat,
+  CalendarClock,
 } from 'lucide-react';
 import InstallPwaButton from './InstallPwaButton';
 import SyncStatusBadge from './SyncStatusBadge';
 
-export type ActiveTab = 'dashboard' | 'pdv' | 'pedidos' | 'crediario' | 'produtos' | 'insumos' | 'categorias' | 'loja';
+export type ActiveTab = 'dashboard' | 'pdv' | 'pedidos' | 'encomendas' | 'crediario' | 'produtos' | 'receitas' | 'insumos' | 'categorias' | 'loja';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -46,7 +48,9 @@ export default function Navbar({
       case 'dashboard': return 'Dashboard Analítico';
       case 'crediario': return 'Crediário & Clientes';
       case 'pedidos': return 'Vendas & Cobranças';
+      case 'encomendas': return 'Agenda de Encomendas & Produção';
       case 'produtos': return 'Produtos & Custos';
+      case 'receitas': return 'Livro de Receitas & Fichas';
       case 'insumos': return 'Estoque de Insumos';
       case 'categorias': return 'Categorias';
       case 'loja': return 'Minha Loja & Dados da Nota';
@@ -76,6 +80,91 @@ export default function Navbar({
             </h1>
             <p className="text-[11px] text-zinc-400 font-medium">{getTitle()}</p>
           </div>
+        </div>
+
+        {/* NAVEGAÇÃO DESKTOP RÁPIDA (MD+) */}
+        <div className="hidden lg:flex items-center gap-1 bg-zinc-950/80 p-1 rounded-2xl border border-zinc-800/80">
+          <button
+            onClick={() => handleSelectTab('pdv')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'pdv' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-neon-green' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <ShoppingCart className="w-3.5 h-3.5" />
+            <span>PDV</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('dashboard')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'dashboard' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span>Dash</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('crediario')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'crediario' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-neon-amber' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Crediário</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('pedidos')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'pedidos' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 shadow-neon-pink' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            <span>Vendas</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('encomendas')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'encomendas' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-neon-amber' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <CalendarClock className="w-3.5 h-3.5" />
+            <span>Encomendas</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('produtos')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'produtos' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-neon-purple' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Utensils className="w-3.5 h-3.5" />
+            <span>Produtos</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('receitas')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'receitas' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-neon-pink' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <ChefHat className="w-3.5 h-3.5" />
+            <span>Receitas</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('insumos')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'insumos' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-neon-amber' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>Insumos</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('categorias')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'categorias' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Tags className="w-3.5 h-3.5" />
+            <span>Categorias</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -174,7 +263,7 @@ export default function Navbar({
           <button
             onClick={() => setDrawerOpen(true)}
             className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition-all ${
-              drawerOpen || ['produtos', 'insumos', 'categorias', 'loja'].includes(activeTab)
+              drawerOpen || ['encomendas', 'produtos', 'receitas', 'insumos', 'categorias', 'loja'].includes(activeTab)
                 ? 'bg-purple-500/20 text-purple-300 border border-purple-500/80 shadow-neon-purple'
                 : 'text-zinc-500 hover:text-purple-400'
             }`}
@@ -209,8 +298,26 @@ export default function Navbar({
               </button>
             </div>
 
-            {/* Grid 2x2 de Módulos com Cores Neon Individuais */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Grid de Módulos com Cores Neon Individuais */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* Encomendas & Agenda - Neon Âmbar */}
+              <button
+                onClick={() => handleSelectTab('encomendas')}
+                className={`p-4 rounded-2xl border flex items-center gap-3 transition-all ${
+                  activeTab === 'encomendas'
+                    ? 'bg-amber-500/10 border-amber-500 text-amber-300 shadow-neon-amber'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-amber-500/40'
+                }`}
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <CalendarClock className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <span className="text-xs font-bold block">Encomendas</span>
+                  <span className="text-[10px] text-zinc-500">Agenda & WhatsApp</span>
+                </div>
+              </button>
+
               {/* Produtos & Custos - Neon Violeta */}
               <button
                 onClick={() => handleSelectTab('produtos')}
@@ -226,6 +333,24 @@ export default function Navbar({
                 <div className="text-left">
                   <span className="text-xs font-bold block">Produtos & Custos</span>
                   <span className="text-[10px] text-zinc-500">Calculadora</span>
+                </div>
+              </button>
+
+              {/* Receitas & Fichas Técnicas - Neon Rose/Pink */}
+              <button
+                onClick={() => handleSelectTab('receitas')}
+                className={`p-4 rounded-2xl border flex items-center gap-3 transition-all ${
+                  activeTab === 'receitas'
+                    ? 'bg-rose-500/10 border-rose-500 text-rose-300 shadow-neon-pink'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-rose-500/40'
+                }`}
+              >
+                <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <ChefHat className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <span className="text-xs font-bold block">Receitas</span>
+                  <span className="text-[10px] text-zinc-500">Fichas & Compartilhar</span>
                 </div>
               </button>
 

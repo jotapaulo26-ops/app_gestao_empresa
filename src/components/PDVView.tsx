@@ -34,6 +34,9 @@ import {
   UtensilsCrossed,
   Coffee,
   Check,
+  CalendarClock,
+  Truck,
+  Store,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { salvarPedidoLocalEOnline } from '@/lib/dataService';
@@ -69,6 +72,18 @@ export default function PDVView({
   const [desconto, setDesconto] = useState<number>(0);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('DINHEIRO');
   const [observacoes, setObservacoes] = useState<string>('');
+
+  // Agendamento de Encomenda no PDV
+  const [isEncomenda, setIsEncomenda] = useState<boolean>(false);
+  const [dataEntrega, setDataEntrega] = useState<string>(() => {
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    return amanha.toISOString().split('T')[0];
+  });
+  const [horaEntrega, setHoraEntrega] = useState<string>('14:00');
+  const [tipoEntrega, setTipoEntrega] = useState<'RETIRADA' | 'ENTREGA'>('RETIRADA');
+  const [enderecoEntrega, setEnderecoEntrega] = useState<string>('');
+  const [telefoneClienteAvulso, setTelefoneClienteAvulso] = useState<string>('');
 
   // Cupom Concluído
   const [pedidoFinalizado, setPedidoFinalizado] = useState<Pedido | null>(null);
@@ -167,6 +182,9 @@ export default function PDVView({
     setCart([]);
     setDesconto(0);
     setObservacoes('');
+    setIsEncomenda(false);
+    setEnderecoEntrega('');
+    setTelefoneClienteAvulso('');
     setErrorMessage('');
     setIsCheckoutOpen(false);
   };
@@ -202,7 +220,8 @@ export default function PDVView({
 
       const body = {
         clienteId: selectedClienteId || undefined,
-        nomeClienteAvulso: !selectedClienteId ? (nomeClienteAvulso || 'Cliente Balcão') : undefined,
+        nomeClienteAvulso: !selectedClienteId ? (nomeClienteAvulso || (isEncomenda ? 'Cliente Encomenda' : 'Cliente Balcão')) : undefined,
+        telefoneClienteAvulso: telefoneClienteAvulso || currentCliente?.telefone || undefined,
         itens,
         totalBruto: subtotal,
         desconto: Number(desconto) || 0,
@@ -211,6 +230,13 @@ export default function PDVView({
         lucroTotal: lucroTotalCarrinho,
         formaPagamento,
         observacoes,
+        isEncomenda,
+        dataEntrega: isEncomenda ? dataEntrega : undefined,
+        horaEntrega: isEncomenda ? horaEntrega : undefined,
+        tipoEntrega: isEncomenda ? tipoEntrega : undefined,
+        enderecoEntrega: isEncomenda && tipoEntrega === 'ENTREGA' ? (enderecoEntrega || currentCliente?.endereco || '') : undefined,
+        observacoesEntrega: isEncomenda ? observacoes : undefined,
+        statusProducao: isEncomenda ? 'A_FAZER' : undefined,
       };
 
       const pedidoSalvo = await salvarPedidoLocalEOnline(body);
@@ -502,6 +528,113 @@ export default function PDVView({
                   ? `Limite de crédito excedido! Disponível: R$ ${crediarioDisponivel.toFixed(2)}.`
                   : 'Selecione um cliente para autorizar compra no crediário.'}
               </span>
+            </div>
+          )}
+        </div>
+
+        {/* Toggle para Agendar como Encomenda */}
+        <div className="bg-zinc-950 p-4 rounded-3xl border border-zinc-900 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="w-5 h-5 text-amber-400" />
+              <div>
+                <span className="text-xs font-bold text-white block">Agendar como Encomenda</span>
+                <span className="text-[10px] text-zinc-500">Definir data, hora e entrega futura</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEncomenda(!isEncomenda)}
+              className={`w-12 h-6 rounded-full transition-colors relative ${
+                isEncomenda ? 'bg-amber-500' : 'bg-zinc-800'
+              }`}
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform ${
+                  isEncomenda ? 'right-0.5' : 'left-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          {isEncomenda && (
+            <div className="pt-3 border-t border-zinc-900 space-y-3 animate-in fade-in duration-150">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">
+                    Data da Entrega *
+                  </label>
+                  <input
+                    type="date"
+                    value={dataEntrega}
+                    onChange={(e) => setDataEntrega(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">
+                    Horário
+                  </label>
+                  <input
+                    type="time"
+                    value={horaEntrega}
+                    onChange={(e) => setHoraEntrega(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">
+                  Tipo de Entrega
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTipoEntrega('RETIRADA')}
+                    className={`py-1.5 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                      tipoEntrega === 'RETIRADA'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span>Retirada Balcão</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipoEntrega('ENTREGA')}
+                    className={`py-1.5 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                      tipoEntrega === 'ENTREGA'
+                        ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    <span>Entrega Endereço</span>
+                  </button>
+                </div>
+              </div>
+
+              {tipoEntrega === 'ENTREGA' && (
+                <input
+                  type="text"
+                  placeholder="Endereço de entrega (rua, número, bairro)"
+                  value={enderecoEntrega || currentCliente?.endereco || ''}
+                  onChange={(e) => setEnderecoEntrega(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              )}
+
+              {!selectedClienteId && (
+                <input
+                  type="text"
+                  placeholder="WhatsApp do cliente (para lembretes)"
+                  value={telefoneClienteAvulso}
+                  onChange={(e) => setTelefoneClienteAvulso(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              )}
             </div>
           )}
         </div>

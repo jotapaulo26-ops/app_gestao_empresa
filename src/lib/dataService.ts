@@ -31,11 +31,14 @@ export async function salvarProdutoLocalEOnline(payload: Partial<Produto>): Prom
     custoEmbalagem: Number(payload.custoEmbalagem) || 0,
     custoMaoDeObra: Number(payload.custoMaoDeObra) || 0,
     custoGasEnergia: Number(payload.custoGasEnergia) || 0,
-    rendimentoReceita: Math.max(1, Number(payload.rendimentoReceita) || 1),
+    rendimentoReceita: Math.max(0.0001, Number(payload.rendimentoReceita) || 1),
     margemLucroPct: Number(payload.margemLucroPct) || 0,
     estoqueAtual: Number(payload.estoqueAtual) || 0,
     estoqueMinimo: Number(payload.estoqueMinimo) || 0,
     fichaTecnica: payload.fichaTecnica || [],
+    modoPreparo: payload.modoPreparo || '',
+    tempoPreparo: payload.tempoPreparo || '',
+    validadeConservacao: payload.validadeConservacao || '',
   };
 
   // 1. Grava no IndexedDB imediatamente
@@ -70,7 +73,7 @@ export async function salvarProdutoLocalEOnline(payload: Partial<Produto>): Prom
       method: 'POST',
       body: produtoFinal,
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 
   return produtoFinal;
@@ -115,7 +118,7 @@ export async function removerProdutoLocalEOnline(id: string): Promise<void> {
       endpoint: `/api/produtos?id=${id}`,
       method: 'DELETE',
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 }
 
@@ -155,7 +158,7 @@ export async function salvarCategoriaLocalEOnline(payload: Partial<Categoria>): 
       method: 'POST',
       body: categoriaFinal,
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 
   return categoriaFinal;
@@ -181,7 +184,7 @@ export async function removerCategoriaLocalEOnline(id: string, cascade: boolean 
       endpoint: `/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`,
       method: 'DELETE',
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 }
 
@@ -226,7 +229,7 @@ export async function salvarInsumoLocalEOnline(payload: Partial<Insumo>): Promis
       method: 'POST',
       body: insumoFinal,
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 
   return insumoFinal;
@@ -252,7 +255,7 @@ export async function removerInsumoLocalEOnline(id: string): Promise<void> {
       endpoint: `/api/insumos?id=${id}`,
       method: 'DELETE',
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 }
 
@@ -298,7 +301,7 @@ export async function salvarClienteLocalEOnline(payload: Partial<Cliente>): Prom
       method: 'POST',
       body: clienteFinal,
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 
   return clienteFinal;
@@ -324,7 +327,7 @@ export async function removerClienteLocalEOnline(id: string): Promise<void> {
       endpoint: `/api/clientes?id=${id}`,
       method: 'DELETE',
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 }
 
@@ -354,7 +357,7 @@ export async function amortizarCrediarioLocalEOnline(body: {
       method: 'POST',
       body,
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 }
 
@@ -410,6 +413,14 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
     lucroTotal: Number(body.lucroTotal) || 0,
     formaPagamento: body.formaPagamento || 'DINHEIRO',
     observacoes: body.observacoes || '',
+    telefoneClienteAvulso: body.telefoneClienteAvulso || '',
+    isEncomenda: !!body.isEncomenda,
+    dataEntrega: body.dataEntrega || '',
+    horaEntrega: body.horaEntrega || '',
+    tipoEntrega: body.tipoEntrega || 'RETIRADA',
+    enderecoEntrega: body.enderecoEntrega || '',
+    observacoesEntrega: body.observacoesEntrega || '',
+    statusProducao: body.statusProducao || (body.isEncomenda ? 'A_FAZER' : undefined),
   };
 
   // Atualiza saldo do cliente localmente
@@ -434,9 +445,48 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
     body: { ...body, id: pedidoFinal.id, codigo: pedidoFinal.codigo, dataVenda: pedidoFinal.dataVenda },
   });
 
-  syncService.processarFila();
+  syncService.atualizarContadorPendentes();
 
   return pedidoFinal;
+}
+
+export async function atualizarStatusProducaoLocalEOnline(
+  pedidoId: string,
+  statusProducao: 'A_FAZER' | 'EM_PRODUCAO' | 'PRONTO' | 'ENTREGUE'
+): Promise<void> {
+  try {
+    const pedidosLocais = await obterItensLocais<Pedido>('pedidos');
+    const p = pedidosLocais.find((item) => item.id === pedidoId);
+    if (p) {
+      p.statusProducao = statusProducao;
+      await salvarItemLocal('pedidos', p);
+    }
+  } catch (err) {
+    console.warn('Erro ao atualizar status do pedido no IndexedDB:', err);
+  }
+
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  let synced = false;
+
+  if (isOnline) {
+    try {
+      const res = await apiFetch(`/api/pedidos/${pedidoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusProducao }),
+      });
+      if (res.ok) synced = true;
+    } catch {}
+  }
+
+  if (!synced) {
+    await enfileirarSincronizacao({
+      endpoint: `/api/pedidos/${pedidoId}`,
+      method: 'PATCH',
+      body: { statusProducao },
+    });
+    syncService.atualizarContadorPendentes();
+  }
 }
 
 export async function cancelarPedidoLocalEOnline(id: string): Promise<void> {
@@ -459,7 +509,7 @@ export async function cancelarPedidoLocalEOnline(id: string): Promise<void> {
       endpoint: `/api/pedidos/${id}`,
       method: 'DELETE',
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 }
 
@@ -487,7 +537,7 @@ export async function salvarConfigLocalEOnline(config: ConfiguracaoLoja): Promis
       method: 'POST',
       body: config,
     });
-    syncService.processarFila();
+    syncService.atualizarContadorPendentes();
   }
 
   return config;

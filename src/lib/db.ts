@@ -313,7 +313,7 @@ export function calculateRecipeCost(
     }
   }
 
-  const rendimento = Math.max(1, Number(rendimentoReceita) || 1);
+  const rendimento = Math.max(0.0001, Number(rendimentoReceita) || 1);
   const custoUnitarioInsumos = Number((custoInsumosReceita / rendimento).toFixed(2));
   const rateioLotePorUnidade = Number(((Number(custoMaoDeObra || 0) + Number(custoGasEnergia || 0)) / rendimento).toFixed(2));
   const custoTotal = Number((custoUnitarioInsumos + rateioLotePorUnidade + Number(custoEmbalagem || 0)).toFixed(2));
@@ -479,7 +479,7 @@ export function saveProduto(produto: Produto, lojaId?: string): Produto {
     produto.categoriaId = loja.categorias[0].id;
   }
 
-  produto.rendimentoReceita = Math.max(1, Number(produto.rendimentoReceita) || 1);
+  produto.rendimentoReceita = Math.max(0.0001, Number(produto.rendimentoReceita) || 1);
   produto.custoGasEnergia = Number(produto.custoGasEnergia) || 0;
   produto.custoEmbalagem = Number(produto.custoEmbalagem) || 0;
   produto.custoMaoDeObra = Number(produto.custoMaoDeObra) || 0;
@@ -619,9 +619,9 @@ export function getPagamentosCrediario(clienteId?: string, lojaId?: string): Pag
 
 export function getPedidos(lojaId?: string): Pedido[] {
   const loja = getLoja(lojaId);
-  return [...loja.pedidos].sort(
-    (a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime()
-  );
+  return loja.pedidos
+    .filter((p) => p.status !== 'CANCELADO')
+    .sort((a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime());
 }
 
 export function createPedido(
@@ -664,7 +664,7 @@ export function createPedido(
     if (!prod) continue;
 
     if (prod.tipo === 'FABRICADO') {
-      const rendimento = Math.max(1, Number(prod.rendimentoReceita) || 1);
+      const rendimento = Math.max(0.0001, Number(prod.rendimentoReceita) || 1);
       if (prod.fichaTecnica && prod.fichaTecnica.length > 0) {
         for (const ft of prod.fichaTecnica) {
           const insumo = loja.insumos.find((i) => i.id === ft.insumoId);
@@ -729,7 +729,7 @@ export function cancelPedido(id: string, lojaId?: string): { success: boolean; e
     if (!prod) continue;
 
     if (prod.tipo === 'FABRICADO' && prod.fichaTecnica) {
-      const rendimento = Math.max(1, Number(prod.rendimentoReceita) || 1);
+      const rendimento = Math.max(0.0001, Number(prod.rendimentoReceita) || 1);
       for (const ft of prod.fichaTecnica) {
         const insumo = loja.insumos.find((i) => i.id === ft.insumoId);
         if (insumo) {
@@ -752,10 +752,28 @@ export function cancelPedido(id: string, lojaId?: string): { success: boolean; e
     }
   }
 
-  pedido.status = 'CANCELADO';
+  // Remove o pedido cancelado da lista para que seja excluído da tela de vendas
+  loja.pedidos = loja.pedidos.filter((p) => p.id !== id);
   db.lojas[loja.id] = loja;
   saveDb(db);
   return { success: true };
+}
+
+export function updateStatusProducaoPedido(
+  id: string,
+  statusProducao: 'A_FAZER' | 'EM_PRODUCAO' | 'PRONTO' | 'ENTREGUE',
+  lojaId?: string
+): { success: boolean; pedido?: Pedido; error?: string } {
+  const db = ensureDb();
+  const loja = getLoja(lojaId);
+  const pedido = loja.pedidos.find((p) => p.id === id);
+
+  if (!pedido) return { success: false, error: 'Pedido não encontrado.' };
+
+  pedido.statusProducao = statusProducao;
+  db.lojas[loja.id] = loja;
+  saveDb(db);
+  return { success: true, pedido };
 }
 
 // =================== PRODUZIR LOTE / FORNADA ===================
@@ -777,8 +795,8 @@ export function produzirLoteProduto(
     return { success: false, error: 'Apenas produtos fabricados com ficha técnica podem ter fornadas produzidas.' };
   }
 
-  const numLotes = Math.max(1, Number(quantidadeLotes) || 1);
-  const rendimento = Math.max(1, Number(prod.rendimentoReceita) || 1);
+  const numLotes = Math.max(0.0001, Number(quantidadeLotes) || 1);
+  const rendimento = Math.max(0.0001, Number(prod.rendimentoReceita) || 1);
 
   // Validação prévia de estoque dos insumos
   for (const ft of prod.fichaTecnica) {
