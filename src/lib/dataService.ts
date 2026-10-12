@@ -39,38 +39,90 @@ export async function salvarProdutoLocalEOnline(payload: Partial<Produto>): Prom
     validadeConservacao: payload.validadeConservacao || '',
   };
 
-  // 1. Grava no disco local (IndexedDB)
+  // 1. Grava no disco local do aparelho (IndexedDB)
   await salvarItemLocal('produtos', produtoFinal);
 
-  // 2. Grava no disco local (servidor data/db.json)
-  try {
-    const res = await apiFetch('/api/produtos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(produtoFinal),
-    });
-
-    if (res.ok) {
-      const prodServidor = await res.json();
-      await salvarItemLocal('produtos', prodServidor);
-      return prodServidor;
-    }
-  } catch (err) {}
+  // 2. Tenta gravar em background no servidor data/db.json apenas se houver rede, sem bloquear ou aguardar
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch('/api/produtos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(produtoFinal),
+      }).catch(() => {});
+    } catch {}
+  }
 
   return produtoFinal;
 }
 
 export async function produzirLoteLocalEOnline(produtoId: string, quantidadeLotes: number = 1): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await apiFetch('/api/produtos/produzir', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ produtoId, quantidadeLotes }),
-    });
+    const produtosLocais = await obterItensLocais<Produto>('produtos');
+    const insumosLocais = await obterItensLocais<Insumo>('insumos');
 
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Erro ao produzir lote');
+    const prod = produtosLocais.find((p) => p.id === produtoId);
+    if (!prod) {
+      return { success: false, error: 'Produto não encontrado no aparelho.' };
+    }
+
+    if (prod.tipo !== 'FABRICADO' || !prod.fichaTecnica || prod.fichaTecnica.length === 0) {
+      return { success: false, error: 'Apenas produtos com ficha técnica podem ter fornadas produzidas.' };
+    }
+
+    const numLotes = Math.max(0.0001, Number(quantidadeLotes) || 1);
+    const rendimento = Math.max(0.0001, Number(prod.rendimentoReceita) || 1);
+
+    // Validação de estoque dos insumos
+    for (const ft of prod.fichaTecnica) {
+      const insumo = insumosLocais.find((i) => i.id === ft.insumoId);
+      if (insumo) {
+        let fator = ft.fatorConversao ?? 1;
+        if (!ft.fatorConversao && ft.unidadeUso) {
+          if (insumo.unidade === 'kg' && ft.unidadeUso === 'g') fator = 0.001;
+          else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
+          else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
+          else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+        }
+        const necessario = (ft.quantidade * fator) * numLotes;
+        if (Number(insumo.estoqueAtual || 0) < necessario) {
+          return {
+            success: false,
+            error: `Estoque insuficiente de "${insumo.nome}". Necessário: ${necessario} ${insumo.unidade}, disponível: ${insumo.estoqueAtual} ${insumo.unidade}.`,
+          };
+        }
+      }
+    }
+
+    // Baixa de estoque nos insumos
+    for (const ft of prod.fichaTecnica) {
+      const insumo = insumosLocais.find((i) => i.id === ft.insumoId);
+      if (insumo) {
+        let fator = ft.fatorConversao ?? 1;
+        if (!ft.fatorConversao && ft.unidadeUso) {
+          if (insumo.unidade === 'kg' && ft.unidadeUso === 'g') fator = 0.001;
+          else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
+          else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
+          else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+        }
+        const consumo = (ft.quantidade * fator) * numLotes;
+        insumo.estoqueAtual = Number(Math.max(0, (Number(insumo.estoqueAtual) || 0) - consumo).toFixed(3));
+        await salvarItemLocal('insumos', insumo);
+      }
+    }
+
+    // Adiciona ao estoque do produto fabricado
+    const totalUnidades = rendimento * numLotes;
+    prod.estoqueAtual = Number(((Number(prod.estoqueAtual) || 0) + totalUnidades).toFixed(2));
+    await salvarItemLocal('produtos', prod);
+
+    // Opcional: replica ao servidor se online
+    if (typeof window !== 'undefined' && navigator.onLine) {
+      apiFetch('/api/produtos/produzir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ produtoId, quantidadeLotes }),
+      }).catch(() => {});
     }
 
     return { success: true };
@@ -82,11 +134,11 @@ export async function produzirLoteLocalEOnline(produtoId: string, quantidadeLote
 export async function removerProdutoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('produtos', id);
 
-  try {
-    await apiFetch(`/api/produtos?id=${id}`, {
-      method: 'DELETE',
-    });
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch(`/api/produtos?id=${id}`, { method: 'DELETE' }).catch(() => {});
+    } catch {}
+  }
 }
 
 export const excluirProdutoLocalEOnline = removerProdutoLocalEOnline;
@@ -102,19 +154,15 @@ export async function salvarCategoriaLocalEOnline(payload: Partial<Categoria>): 
 
   await salvarItemLocal('categorias', categoriaFinal);
 
-  try {
-    const res = await apiFetch('/api/categorias', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(categoriaFinal),
-    });
-
-    if (res.ok) {
-      const catServidor = await res.json();
-      await salvarItemLocal('categorias', catServidor);
-      return catServidor;
-    }
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch('/api/categorias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(categoriaFinal),
+      }).catch(() => {});
+    } catch {}
+  }
 
   return categoriaFinal;
 }
@@ -122,11 +170,13 @@ export async function salvarCategoriaLocalEOnline(payload: Partial<Categoria>): 
 export async function removerCategoriaLocalEOnline(id: string, cascade: boolean = false): Promise<void> {
   await removerItemLocal('categorias', id);
 
-  try {
-    await apiFetch(`/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`, {
-      method: 'DELETE',
-    });
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch(`/api/categorias?id=${id}${cascade ? '&cascade=true' : ''}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    } catch {}
+  }
 }
 
 export const excluirCategoriaLocalEOnline = removerCategoriaLocalEOnline;
@@ -145,19 +195,15 @@ export async function salvarInsumoLocalEOnline(payload: Partial<Insumo>): Promis
 
   await salvarItemLocal('insumos', insumoFinal);
 
-  try {
-    const res = await apiFetch('/api/insumos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(insumoFinal),
-    });
-
-    if (res.ok) {
-      const insServidor = await res.json();
-      await salvarItemLocal('insumos', insServidor);
-      return insServidor;
-    }
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch('/api/insumos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(insumoFinal),
+      }).catch(() => {});
+    } catch {}
+  }
 
   return insumoFinal;
 }
@@ -165,11 +211,13 @@ export async function salvarInsumoLocalEOnline(payload: Partial<Insumo>): Promis
 export async function removerInsumoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('insumos', id);
 
-  try {
-    await apiFetch(`/api/insumos?id=${id}`, {
-      method: 'DELETE',
-    });
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch(`/api/insumos?id=${id}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    } catch {}
+  }
 }
 
 export const excluirInsumoLocalEOnline = removerInsumoLocalEOnline;
@@ -189,19 +237,15 @@ export async function salvarClienteLocalEOnline(payload: Partial<Cliente>): Prom
 
   await salvarItemLocal('clientes', clienteFinal);
 
-  try {
-    const res = await apiFetch('/api/clientes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(clienteFinal),
-    });
-
-    if (res.ok) {
-      const cliServidor = await res.json();
-      await salvarItemLocal('clientes', cliServidor);
-      return cliServidor;
-    }
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch('/api/clientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clienteFinal),
+      }).catch(() => {});
+    } catch {}
+  }
 
   return clienteFinal;
 }
@@ -209,11 +253,13 @@ export async function salvarClienteLocalEOnline(payload: Partial<Cliente>): Prom
 export async function removerClienteLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('clientes', id);
 
-  try {
-    await apiFetch(`/api/clientes?id=${id}`, {
-      method: 'DELETE',
-    });
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch(`/api/clientes?id=${id}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    } catch {}
+  }
 }
 
 export const excluirClienteLocalEOnline = removerClienteLocalEOnline;
@@ -237,13 +283,15 @@ export async function amortizarCrediarioLocalEOnline(body: {
     console.warn('Erro ao atualizar saldo do cliente localmente:', err);
   }
 
-  try {
-    await apiFetch('/api/crediario/amortizar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch('/api/crediario/amortizar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    } catch {}
+  }
 }
 
 export const salvarAmortizacaoLocalEOnline = amortizarCrediarioLocalEOnline;
@@ -305,20 +353,16 @@ export async function salvarPedidoLocalEOnline(body: any): Promise<Pedido> {
   // 3. Grava no banco do celular na hora
   await salvarItemLocal('pedidos', pedidoFinal);
 
-  // 4. Grava no disco rígido local do servidor
-  try {
-    const res = await apiFetch('/api/pedidos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, id: pedidoFinal.id, codigo: pedidoFinal.codigo, dataVenda: pedidoFinal.dataVenda }),
-    });
-
-    if (res.ok) {
-      const pedServidor = await res.json();
-      await salvarItemLocal('pedidos', pedServidor);
-      return pedServidor;
-    }
-  } catch {}
+  // 4. Se houver conexão, replica no servidor em background sem travar a interface
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch('/api/pedidos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, id: pedidoFinal.id, codigo: pedidoFinal.codigo, dataVenda: pedidoFinal.dataVenda }),
+      }).catch(() => {});
+    } catch {}
+  }
 
   return pedidoFinal;
 }
@@ -338,23 +382,27 @@ export async function atualizarStatusProducaoLocalEOnline(
     console.warn('Erro ao atualizar status do pedido no IndexedDB:', err);
   }
 
-  try {
-    await apiFetch(`/api/pedidos/${pedidoId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ statusProducao }),
-    });
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch(`/api/pedidos/${pedidoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusProducao }),
+      }).catch(() => {});
+    } catch {}
+  }
 }
 
 export async function cancelarPedidoLocalEOnline(id: string): Promise<void> {
   await removerItemLocal('pedidos', id);
 
-  try {
-    await apiFetch(`/api/pedidos/${id}`, {
-      method: 'DELETE',
-    });
-  } catch {}
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch(`/api/pedidos/${id}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    } catch {}
+  }
 }
 
 // =================== CONFIGURAÇÕES DA LOJA ===================
@@ -369,28 +417,19 @@ export async function salvarConfigLocalEOnline(config: ConfiguracaoLoja): Promis
   // 2. Salva no IndexedDB do navegador
   await salvarItemLocal('configuracoes', { id: 'loja-config', ...config });
 
-  // 3. Persiste no arquivo db.json do servidor local
-  try {
-    const res = await apiFetch('/api/configuracoes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-      },
-      body: JSON.stringify(config),
-    });
-
-    if (res.ok) {
-      const cfgServidor = await res.json();
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('erp_loja_config', JSON.stringify(cfgServidor));
-        } catch {}
-      }
-      await salvarItemLocal('configuracoes', { id: 'loja-config', ...cfgServidor });
-      return cfgServidor;
-    }
-  } catch {}
+  // 3. Se houver conexão, replica no servidor
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      apiFetch('/api/configuracoes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        },
+        body: JSON.stringify(config),
+      }).catch(() => {});
+    } catch {}
+  }
 
   return config;
 }

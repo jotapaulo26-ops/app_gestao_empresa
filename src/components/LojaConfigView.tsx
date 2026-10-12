@@ -12,9 +12,13 @@ import {
   MapPin,
   Building2,
   Sparkles,
+  Download,
+  Upload,
+  HardDrive,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { salvarConfigLocalEOnline } from '@/lib/dataService';
+import { exportarBackupCompleto, importarBackupCompleto } from '@/lib/indexedDb';
 
 interface LojaConfigViewProps {
   config?: ConfiguracaoLoja;
@@ -125,6 +129,76 @@ export default function LojaConfigView({ config, lojaId, onRefresh, onConfigUpda
             Trocar de Loja neste Celular
           </button>
         )}
+      </div>
+
+      {/* Card de Backup e Segurança dos Dados (100% Offline) */}
+      <div className="bg-zinc-950 p-4 rounded-3xl border border-zinc-800 space-y-3">
+        <div className="flex items-center gap-2">
+          <HardDrive className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+            Backup & Segurança dos Dados
+          </h3>
+        </div>
+        <p className="text-[11px] text-zinc-400 leading-relaxed">
+          Como seus dados ficam salvos 100% no seu aparelho sem precisar de internet, você pode baixar uma cópia de segurança (JSON) para guardar ou passar para outro celular.
+        </p>
+
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          {/* Botão Baixar Backup */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const dados = await exportarBackupCompleto();
+                const jsonStr = JSON.stringify(dados, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const dataFormatada = new Date().toISOString().slice(0, 10);
+                a.href = url;
+                a.download = `backup-loja-${dados.lojaId}-${dataFormatada}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                setSuccessMsg('Backup exportado com sucesso! Arquivo salvo no seu aparelho.');
+              } catch (err: any) {
+                setErrorMsg('Erro ao gerar arquivo de backup: ' + (err.message || 'Falha'));
+              }
+            }}
+            className="py-2.5 px-3 bg-zinc-900 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-[0_0_8px_rgba(0,240,255,0.15)]"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Baixar Backup</span>
+          </button>
+
+          {/* Botão Restaurar Backup */}
+          <label className="py-2.5 px-3 bg-zinc-900 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-[0_0_8px_rgba(0,255,136,0.15)] cursor-pointer">
+            <Upload className="w-3.5 h-3.5" />
+            <span>Restaurar Backup</span>
+            <input
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const texto = await file.text();
+                  const backupObj = JSON.parse(texto);
+                  await importarBackupCompleto(backupObj);
+                  setSuccessMsg('Backup restaurado com sucesso! Recarregando sua loja...');
+                  setTimeout(() => {
+                    onRefresh();
+                  }, 600);
+                } catch (err: any) {
+                  setErrorMsg('Erro ao importar backup: ' + (err.message || 'Arquivo inválido'));
+                }
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       <form onSubmit={handleSave} className="space-y-4 pb-16">

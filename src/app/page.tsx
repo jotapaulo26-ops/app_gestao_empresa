@@ -101,21 +101,30 @@ export default function HomePage() {
         obterItensLocais<Pedido>('pedidos'),
       ]);
 
-      if (Array.isArray(localCat) && localCat.length > 0) setCategorias(localCat);
-      if (Array.isArray(localIns) && localIns.length > 0) setInsumos(localIns);
-      if (Array.isArray(localProd) && localProd.length > 0) setProdutos(localProd);
-      if (Array.isArray(localCli) && localCli.length > 0) setClientes(localCli);
-      if (Array.isArray(localPed) && localPed.length > 0) setPedidos(localPed);
-
-      // Se já temos produtos ou categorias no celular, libera a interface na hora
-      if ((Array.isArray(localProd) && localProd.length > 0) || (Array.isArray(localCat) && localCat.length > 0)) {
-        setLoading(false);
+      if (Array.isArray(localCat)) setCategorias(localCat);
+      if (Array.isArray(localIns)) setInsumos(localIns);
+      if (Array.isArray(localProd)) setProdutos(localProd);
+      if (Array.isArray(localCli)) setClientes(localCli);
+      if (Array.isArray(localPed)) {
+        const pedValidos = localPed
+          .filter((p) => p && p.status !== 'CANCELADO')
+          .sort((a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime());
+        setPedidos(pedValidos);
       }
+
+      // Libera a tela imediatamente com os dados locais do celular
+      setLoading(false);
     } catch (errLocal) {
       console.warn('Leitura local falhou:', errLocal);
+      setLoading(false);
     }
 
-    // 2. SINCRONIZAÇÃO COM A NUVEM EM SEGUNDO PLANO
+    // Se estiver offline no navegador, encerra aqui sem disparar fetch
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      return;
+    }
+
+    // 2. SINCRONIZAÇÃO OPCIONAL COM O SERVIDOR APENAS SE ONLINE
     const headers: Record<string, string> = {
       'x-loja-id': lId,
     };
@@ -124,96 +133,46 @@ export default function HomePage() {
     }
 
     try {
-      const filaPendentes = await obterFilaSincronizacao();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-      const [resCat, resIns, resProd, resCli, resPed, resDash, resCfg] = await Promise.all([
-        fetch('/api/categorias', { headers }).then((r) => r.json()).catch(() => null),
-        fetch('/api/insumos', { headers }).then((r) => r.json()).catch(() => null),
-        fetch('/api/produtos', { headers }).then((r) => r.json()).catch(() => null),
-        fetch('/api/clientes', { headers }).then((r) => r.json()).catch(() => null),
-        fetch('/api/pedidos', { headers }).then((r) => r.json()).catch(() => null),
-        fetch('/api/dashboard', { headers }).then((r) => r.json()).catch(() => null),
-        fetch('/api/configuracoes', { headers, cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+      const [resCat, resIns, resProd, resCli, resPed, resCfg] = await Promise.all([
+        fetch('/api/categorias', { headers, signal: controller.signal }).then((r) => r.json()).catch(() => null),
+        fetch('/api/insumos', { headers, signal: controller.signal }).then((r) => r.json()).catch(() => null),
+        fetch('/api/produtos', { headers, signal: controller.signal }).then((r) => r.json()).catch(() => null),
+        fetch('/api/clientes', { headers, signal: controller.signal }).then((r) => r.json()).catch(() => null),
+        fetch('/api/pedidos', { headers, signal: controller.signal }).then((r) => r.json()).catch(() => null),
+        fetch('/api/configuracoes', { headers, cache: 'no-store', signal: controller.signal }).then((r) => r.json()).catch(() => null),
       ]);
+      clearTimeout(timeoutId);
 
-      // Categorias - Mesclagem inteligente
-      if (Array.isArray(resCat)) {
-        const mapa = new Map<string, Categoria>();
-        resCat.forEach((c) => mapa.set(c.id, c));
-        localCat.forEach((c) => {
-          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === c.id || t.endpoint === '/api/categorias'));
-          if (!mapa.has(c.id) && pendente) mapa.set(c.id, c);
-        });
-        const finalCat = Array.from(mapa.values());
-        setCategorias(finalCat);
-        salvarItensLocais('categorias', finalCat);
+      // Atualiza estado e IndexedDB apenas se o servidor respondeu com dados válidos
+      if (Array.isArray(resCat) && resCat.length > 0) {
+        setCategorias(resCat);
+        salvarItensLocais('categorias', resCat);
       }
-
-      // Insumos - Mesclagem inteligente
-      if (Array.isArray(resIns)) {
-        const mapa = new Map<string, Insumo>();
-        resIns.forEach((i) => mapa.set(i.id, i));
-        localIns.forEach((i) => {
-          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === i.id || t.endpoint === '/api/insumos'));
-          if (!mapa.has(i.id) && pendente) mapa.set(i.id, i);
-        });
-        const finalIns = Array.from(mapa.values());
-        setInsumos(finalIns);
-        salvarItensLocais('insumos', finalIns);
+      if (Array.isArray(resIns) && resIns.length > 0) {
+        setInsumos(resIns);
+        salvarItensLocais('insumos', resIns);
       }
-
-      // Produtos - Mesclagem inteligente
-      if (Array.isArray(resProd)) {
-        const mapa = new Map<string, Produto>();
-        resProd.forEach((p) => mapa.set(p.id, p));
-        localProd.forEach((p) => {
-          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === p.id || t.endpoint === '/api/produtos'));
-          if (!mapa.has(p.id) && pendente) mapa.set(p.id, p);
-        });
-        const finalProd = Array.from(mapa.values());
-        setProdutos(finalProd);
-        salvarItensLocais('produtos', finalProd);
+      if (Array.isArray(resProd) && resProd.length > 0) {
+        setProdutos(resProd);
+        salvarItensLocais('produtos', resProd);
       }
-
-      // Clientes - Mesclagem inteligente
-      if (Array.isArray(resCli)) {
-        const mapa = new Map<string, Cliente>();
-        resCli.forEach((c) => mapa.set(c.id, c));
-        localCli.forEach((c) => {
-          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === c.id || t.endpoint === '/api/clientes'));
-          if (!mapa.has(c.id) && pendente) mapa.set(c.id, c);
-        });
-        const finalCli = Array.from(mapa.values());
-        setClientes(finalCli);
-        salvarItensLocais('clientes', finalCli);
+      if (Array.isArray(resCli) && resCli.length > 0) {
+        setClientes(resCli);
+        salvarItensLocais('clientes', resCli);
       }
-
-      // Pedidos - Mesclagem inteligente (excluindo cancelados)
-      if (Array.isArray(resPed)) {
-        const mapa = new Map<string, Pedido>();
-        resPed.filter((p) => p && p.status !== 'CANCELADO').forEach((p) => mapa.set(p.id, p));
-        localPed.filter((p) => p && p.status !== 'CANCELADO').forEach((p) => {
-          const pendente = filaPendentes.some((t) => t.method === 'POST' && (t.body?.id === p.id || t.endpoint === '/api/pedidos'));
-          if (!mapa.has(p.id) && pendente) mapa.set(p.id, p);
-        });
-        const finalPed = Array.from(mapa.values()).sort(
-          (a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime()
-        );
-        setPedidos(finalPed);
-        salvarItensLocais('pedidos', finalPed);
+      if (Array.isArray(resPed) && resPed.length > 0) {
+        const pedFiltrados = resPed
+          .filter((p) => p && p.status !== 'CANCELADO')
+          .sort((a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime());
+        setPedidos(pedFiltrados);
+        salvarItensLocais('pedidos', pedFiltrados);
       }
-
-      if (resDash && !resDash.error) setDashboardMetrics(resDash);
       if (resCfg && !resCfg.error) {
-        // Prioridade para as configurações locais salvas pelo usuário
         const savedLocal = typeof window !== 'undefined' ? localStorage.getItem('erp_loja_config') : null;
-        if (savedLocal) {
-          try {
-            setConfigLoja(JSON.parse(savedLocal));
-          } catch {
-            setConfigLoja(resCfg);
-          }
-        } else {
+        if (!savedLocal) {
           setConfigLoja(resCfg);
           if (typeof window !== 'undefined') {
             try {
@@ -222,9 +181,8 @@ export default function HomePage() {
           }
         }
       }
-
     } catch (err) {
-      console.warn('Modo offline ativo: usando dados salvos no celular.', err);
+      console.log('Operando 100% offline.');
     } finally {
       setLoading(false);
     }

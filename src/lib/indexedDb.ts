@@ -305,3 +305,87 @@ export async function limparTodosOsDadosLocais(): Promise<void> {
   }
 }
 
+/**
+ * Exporta todos os dados salvos no aparelho como um objeto JSON estruturado
+ */
+export async function exportarBackupCompleto(): Promise<{
+  versao: string;
+  dataExportacao: string;
+  lojaId: string;
+  configuracoes: any[];
+  categorias: any[];
+  insumos: any[];
+  produtos: any[];
+  clientes: any[];
+  pedidos: any[];
+}> {
+  const [configuracoes, categorias, insumos, produtos, clientes, pedidos] = await Promise.all([
+    obterItensLocais('configuracoes'),
+    obterItensLocais('categorias'),
+    obterItensLocais('insumos'),
+    obterItensLocais('produtos'),
+    obterItensLocais('clientes'),
+    obterItensLocais('pedidos'),
+  ]);
+
+  const lojaId = typeof window !== 'undefined' ? (localStorage.getItem('erp_usuario_loja_id') || 'LOJA-LOCAL') : 'LOJA-LOCAL';
+
+  return {
+    versao: '2.0-offline',
+    dataExportacao: new Date().toISOString(),
+    lojaId,
+    configuracoes,
+    categorias,
+    insumos,
+    produtos,
+    clientes,
+    pedidos,
+  };
+}
+
+/**
+ * Importa um arquivo de backup JSON no banco do aparelho
+ */
+export async function importarBackupCompleto(backup: any): Promise<boolean> {
+  if (!backup || typeof backup !== 'object') {
+    throw new Error('Arquivo de backup inválido.');
+  }
+
+  // 1. Limpa o banco atual
+  await limparTodosOsDadosLocais();
+
+  // 2. Restaura coleções
+  if (Array.isArray(backup.categorias) && backup.categorias.length > 0) {
+    await salvarItensLocais('categorias', backup.categorias);
+  }
+  if (Array.isArray(backup.insumos) && backup.insumos.length > 0) {
+    await salvarItensLocais('insumos', backup.insumos);
+  }
+  if (Array.isArray(backup.produtos) && backup.produtos.length > 0) {
+    await salvarItensLocais('produtos', backup.produtos);
+  }
+  if (Array.isArray(backup.clientes) && backup.clientes.length > 0) {
+    await salvarItensLocais('clientes', backup.clientes);
+  }
+  if (Array.isArray(backup.pedidos) && backup.pedidos.length > 0) {
+    await salvarItensLocais('pedidos', backup.pedidos);
+  }
+  if (Array.isArray(backup.configuracoes) && backup.configuracoes.length > 0) {
+    await salvarItensLocais('configuracoes', backup.configuracoes);
+    const cfg = backup.configuracoes.find((c: any) => c.id === 'loja-config') || backup.configuracoes[0];
+    if (cfg && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('erp_loja_config', JSON.stringify(cfg));
+      } catch {}
+    }
+  }
+
+  if (backup.lojaId && typeof window !== 'undefined') {
+    localStorage.setItem('erp_usuario_loja_id', backup.lojaId);
+    localStorage.setItem('erp_loja_codigo', backup.lojaId);
+  }
+
+  return true;
+}
+
+
