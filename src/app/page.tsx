@@ -12,9 +12,10 @@ import ReceitasView from '@/components/ReceitasView';
 import InsumosView from '@/components/InsumosView';
 import CategoriasView from '@/components/CategoriasView';
 import LojaConfigView from '@/components/LojaConfigView';
+import LojaSeletorModal from '@/components/LojaSeletorModal';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
-import { obterItensLocais, salvarItensLocais, obterFilaSincronizacao } from '@/lib/indexedDb';
+import { obterItensLocais, salvarItensLocais, obterFilaSincronizacao, limparTodosOsDadosLocais } from '@/lib/indexedDb';
 import { calcularDashboardMetrics } from '@/lib/dashboardMetrics';
 
 interface SessaoState {
@@ -229,10 +230,58 @@ export default function HomePage() {
     }
   }, [sessao.lojaId, sessao.token]);
 
-  // Carrega imediatamente ao iniciar o app no disco local
+  const [modalLojaAberta, setModalLojaAberta] = useState(false);
+
+  // Carrega imediatamente ao iniciar o app no disco local ou abre seletor de loja
   useEffect(() => {
-    loadAllData();
+    if (typeof window !== 'undefined') {
+      const lojaSalva = localStorage.getItem('erp_usuario_loja_id');
+      if (!lojaSalva) {
+        setModalLojaAberta(true);
+      } else {
+        setSessao((prev) => ({
+          ...prev,
+          lojaId: lojaSalva,
+          token: `token-${lojaSalva}`,
+          usuario: {
+            ...prev.usuario,
+            lojaId: lojaSalva,
+          },
+        }));
+        loadAllData(lojaSalva);
+      }
+    }
   }, [loadAllData]);
+
+  const handleLojaSelecionada = async (novoLojaId: string, novoNomeLoja: string) => {
+    setLoading(true);
+    await limparTodosOsDadosLocais();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('erp_loja_config');
+      localStorage.setItem('erp_usuario_loja_id', novoLojaId);
+      localStorage.setItem('erp_loja_codigo', novoLojaId);
+    }
+    setSessao({
+      usuario: {
+        id: `user-${novoLojaId}`,
+        nome: 'Operador',
+        email: '',
+        lojaId: novoLojaId,
+        nomeLoja: novoNomeLoja,
+      },
+      token: `token-${novoLojaId}`,
+      lojaId: novoLojaId,
+    });
+    setConfigLoja(null);
+    setCategorias([]);
+    setInsumos([]);
+    setProdutos([]);
+    setClientes([]);
+    setPedidos([]);
+    setModalLojaAberta(false);
+    await loadAllData(novoLojaId);
+    setLoading(false);
+  };
 
   // Métricas do Dashboard calculadas 100% em TEMPO REAL (Chamada incondicional de Hook no topo)
   const realTimeDashboardMetrics = useMemo(() => {
@@ -385,8 +434,10 @@ export default function HomePage() {
                 <ErrorBoundary fallbackTitle="Configurações da Loja">
                   <LojaConfigView
                     config={configLoja || undefined}
+                    lojaId={sessao.lojaId}
                     onRefresh={() => loadAllData()}
                     onConfigUpdated={(novaConfig) => setConfigLoja(novaConfig)}
+                    onTrocarLoja={() => setModalLojaAberta(true)}
                   />
                 </ErrorBoundary>
               </div>
@@ -394,6 +445,14 @@ export default function HomePage() {
           </>
         )}
       </main>
+
+      {/* Modal de Conexão e Troca de Loja para Múltiplos Aparelhos */}
+      <LojaSeletorModal
+        isOpen={modalLojaAberta}
+        onLojaSelecionada={handleLojaSelecionada}
+        onClose={() => setModalLojaAberta(false)}
+        permiteFechar={Boolean(typeof window !== 'undefined' && localStorage.getItem('erp_usuario_loja_id'))}
+      />
     </div>
   );
 }

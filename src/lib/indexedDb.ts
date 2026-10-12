@@ -285,3 +285,23 @@ export async function limparFilaSincronizacao(): Promise<void> {
     console.warn('Erro ao limpar fila de sincronização:', err);
   }
 }
+
+/**
+ * Limpa todos os dados locais do IndexedDB para trocar de loja sem misturar
+ */
+export async function limparTodosOsDadosLocais(): Promise<void> {
+  try {
+    if (typeof window === 'undefined' || !window.indexedDB) return;
+    const db = await openLocalDB();
+    const stores = ['produtos', 'categorias', 'insumos', 'clientes', 'pedidos', 'configuracoes'];
+    for (const st of stores) {
+      if (db.objectStoreNames.contains(st)) {
+        const tx = db.transaction(st, 'readwrite');
+        tx.objectStore(st).clear();
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao limpar dados locais do IndexedDB:', err);
+  }
+}
+

@@ -103,25 +103,17 @@ function saveDb(data: DatabaseSchema): void {
 
 // =================== RESOLUÇÃO E GESTÃO DE LOJAS ===================
 
-export function getLoja(lojaId?: string): DadosLoja {
+export function getOrCreateLoja(lojaId: string, nomeLoja?: string): DadosLoja {
   const db = ensureDb();
-
-  // Se lojaId for fornecido e existir
-  if (lojaId && db.lojas[lojaId]) {
-    return db.lojas[lojaId];
+  const cleanId = (lojaId || 'LOJA-PADRAO').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+  
+  if (db.lojas[cleanId]) {
+    return db.lojas[cleanId];
   }
 
-  // Fallback: primeira loja existente
-  const firstId = Object.keys(db.lojas)[0];
-  if (firstId && db.lojas[firstId]) {
-    return db.lojas[firstId];
-  }
-
-  // Caso extremo: nenhuma loja ainda criada
-  const fallbackId = 'loja-padrao';
   const novaLoja: DadosLoja = {
-    id: fallbackId,
-    nomeLoja: 'Minha Loja',
+    id: cleanId,
+    nomeLoja: nomeLoja?.trim() || cleanId,
     criadoEm: new Date().toISOString(),
     categorias: [{ id: 'cat-geral', nome: 'Geral' }],
     insumos: [],
@@ -130,17 +122,36 @@ export function getLoja(lojaId?: string): DadosLoja {
     pedidos: [],
     pagamentosCrediario: [],
     configuracaoLoja: {
-      nomeLoja: 'Minha Loja',
+      nomeLoja: nomeLoja?.trim() || cleanId,
       chavePix: '',
       tipoChavePix: 'CELULAR',
-      titularPix: 'Proprietário',
-      cidadePix: 'SAO PAULO',
+      titularPix: '',
+      cidadePix: '',
       mensagemRodape: 'Agradecemos a sua preferência! Volte sempre.',
     },
   };
-  db.lojas[fallbackId] = novaLoja;
+
+  db.lojas[cleanId] = novaLoja;
   saveDb(db);
   return novaLoja;
+}
+
+export function getLoja(lojaId?: string): DadosLoja {
+  const db = ensureDb();
+
+  // Se lojaId for fornecido, cria ou busca especificamente esta loja isolada
+  if (lojaId && lojaId.trim()) {
+    return getOrCreateLoja(lojaId);
+  }
+
+  // Fallback: primeira loja existente
+  const firstId = Object.keys(db.lojas)[0];
+  if (firstId && db.lojas[firstId]) {
+    return db.lojas[firstId];
+  }
+
+  // Nenhuma loja existente: cria loja padrão inicial
+  return getOrCreateLoja('LOJA-PADRAO', 'Minha Loja');
 }
 
 // =================== AUTENTICAÇÃO E SESSÕES ===================

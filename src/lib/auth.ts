@@ -27,7 +27,9 @@ export function gerarTokenSessao(): string {
 export function extrairLojaId(request: Request): string {
   // 1. Header direto x-loja-id
   const headerLojaId = request.headers.get('x-loja-id');
-  if (headerLojaId) return headerLojaId;
+  if (headerLojaId && headerLojaId.trim()) {
+    return headerLojaId.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+  }
 
   // 2. Token no header Authorization
   const authHeader = request.headers.get('authorization');

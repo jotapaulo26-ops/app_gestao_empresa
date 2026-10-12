@@ -18,11 +18,13 @@ import { salvarConfigLocalEOnline } from '@/lib/dataService';
 
 interface LojaConfigViewProps {
   config?: ConfiguracaoLoja;
+  lojaId?: string;
   onRefresh: () => void;
   onConfigUpdated?: (config: ConfiguracaoLoja) => void;
+  onTrocarLoja?: () => void;
 }
 
-export default function LojaConfigView({ config, onRefresh, onConfigUpdated }: LojaConfigViewProps) {
+export default function LojaConfigView({ config, lojaId, onRefresh, onConfigUpdated, onTrocarLoja }: LojaConfigViewProps) {
   const [formData, setFormData] = useState<ConfiguracaoLoja>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('erp_loja_config');
@@ -101,6 +103,28 @@ export default function LojaConfigView({ config, onRefresh, onConfigUpdated }: L
         <p className="text-xs text-zinc-400 mt-1">
           Personalize as informações da sua empresa e a chave Pix que aparecerão nos cupons e faturas em PDF.
         </p>
+      </div>
+
+      {/* Card do Código da Loja (Multi-Aparelhos) */}
+      <div className="bg-zinc-950 p-4 rounded-3xl border border-zinc-800 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Código deste Aparelho:</span>
+          <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
+            {lojaId || (typeof window !== 'undefined' ? localStorage.getItem('erp_usuario_loja_id') : '') || 'LOJA-LOCAL'}
+          </span>
+        </div>
+        <p className="text-[11px] text-zinc-400 leading-relaxed">
+          Use este código para abrir exatamente esta mesma loja em outro celular ou tablet.
+        </p>
+        {onTrocarLoja && (
+          <button
+            type="button"
+            onClick={onTrocarLoja}
+            className="w-full py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition-all"
+          >
+            Trocar de Loja neste Celular
+          </button>
+        )}
       </div>
 
       <form onSubmit={handleSave} className="space-y-4 pb-16">
