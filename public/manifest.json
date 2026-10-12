@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "ERP & PDV Manu - Dark Neon",
-  "short_name": "PDV Manu",
-  "description": "Sistema completo de PDV Caixa, Crediário, Custos e Estoque",
+  "name": "Cozinha",
+  "short_name": "Cozinha",
+  "description": "App Cozinha - Sistema de Pedidos, Encomendas e Gestão",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

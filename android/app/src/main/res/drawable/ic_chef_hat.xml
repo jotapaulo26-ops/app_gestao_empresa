@@ -1,0 +1,57 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Círculo / Brilho Neon sutil -->
+    <path
+        android:fillColor="#1A00FF88"
+        android:pathData="M54,54m-44,0a44,44 0,1 1,88 0a44,44 0,1 1,-88 0" />
+
+    <!-- Base do Chapéu de Chef (Faixa inferior) -->
+    <path
+        android:fillColor="#151515"
+        android:strokeColor="#00FF88"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M35,74 L73,74 A3,3 0 0,0 76,71 L76,66 A3,3 0 0,0 73,63 L35,63 A3,3 0 0,0 32,66 L32,71 A3,3 0 0,0 35,74 Z" />
+
+    <!-- Detalhe ciano na faixa -->
+    <path
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M40,68.5 L68,68.5" />
+
+    <!-- Corpo do Chapéu de Chef com dobras arredondadas (Toque Blanche) -->
+    <path
+        android:fillColor="#1E1E1E"
+        android:strokeColor="#FF2A85"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M35,63
+                         C27,62 23,50 30,42
+                         C26,34 35,26 44,30
+                         C48,22 60,22 64,30
+                         C73,26 82,34 78,42
+                         C85,50 81,62 73,63 Z" />
+
+    <!-- Dobras Internas do Chapéu -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M44,63 C43,51 41,40 47,33" />
+    <path
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M64,63 C65,51 67,40 61,33" />
+
+    <!-- Estrela / Mestre Cuca no centro do chapéu -->
+    <path
+        android:fillColor="#00FF88"
+        android:pathData="M54,49m-2.8,0a2.8,2.8 0,1 1,5.6 0a2.8,2.8 0,1 1,-5.6 0" />
+</vector>

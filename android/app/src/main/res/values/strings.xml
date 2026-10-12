@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Cozinha</string>
+    <string name="title_activity_main">Cozinha</string>
+    <string name="package_name">com.cozinha.app</string>
+    <string name="custom_url_scheme">com.cozinha.app</string>
+</resources>

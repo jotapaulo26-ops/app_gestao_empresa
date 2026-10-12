@@ -2,17 +2,17 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ERP & PDV Dark Neon - Manu',
-  description: 'Sistema mobile-first de PDV, Crediário, Custos e Estoque com Ficha Técnica',
+  title: 'Cozinha',
+  description: 'Sistema Cozinha de PDV, Encomendas, Crediário, Custos e Estoque',
   manifest: '/manifest.json',
   icons: {
     icon: '/icon.svg',
-    apple: '/icon-192.png',
+    apple: '/icon.svg',
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'PDV Manu',
+    title: 'Cozinha',
   },
 };
 
