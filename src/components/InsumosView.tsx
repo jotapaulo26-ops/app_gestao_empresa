@@ -14,6 +14,34 @@ import {
 import { apiFetch } from '@/lib/api';
 import { salvarInsumoLocalEOnline, removerInsumoLocalEOnline } from '@/lib/dataService';
 
+export const UNIDADES_CONFIG: Record<
+  UnidadeMedida,
+  {
+    nome: string;
+    sigla: string;
+    grupo: 'embalagem' | 'peso' | 'volume';
+    defaultUnidades?: number;
+    placeholder?: string;
+  }
+> = {
+  un: { nome: 'Unidade Avulsa (un)', sigla: 'un', grupo: 'embalagem', defaultUnidades: 1 },
+  dz: { nome: 'Dúzia (12 un)', sigla: 'dz', grupo: 'embalagem', defaultUnidades: 12, placeholder: '12' },
+  cx: { nome: 'Caixa (cx)', sigla: 'cx', grupo: 'embalagem', defaultUnidades: 24, placeholder: 'Ex: 24' },
+  pct: { nome: 'Pacote (pct)', sigla: 'pct', grupo: 'embalagem', defaultUnidades: 10, placeholder: 'Ex: 10' },
+  fd: { nome: 'Fardo (fd)', sigla: 'fd', grupo: 'embalagem', defaultUnidades: 12, placeholder: 'Ex: 12' },
+  crt: { nome: 'Cartela (crt)', sigla: 'crt', grupo: 'embalagem', defaultUnidades: 30, placeholder: 'Ex: 30' },
+  lt: { nome: 'Lata (lt)', sigla: 'lt', grupo: 'embalagem', defaultUnidades: 1, placeholder: '1' },
+  pt: { nome: 'Pote (pt)', sigla: 'pt', grupo: 'embalagem', defaultUnidades: 1, placeholder: '1' },
+  gf: { nome: 'Garrafa (gf)', sigla: 'gf', grupo: 'embalagem', defaultUnidades: 1, placeholder: '1' },
+  br: { nome: 'Barra (br)', sigla: 'br', grupo: 'embalagem', defaultUnidades: 1, placeholder: '1' },
+  cp: { nome: 'Copo (cp)', sigla: 'cp', grupo: 'embalagem', defaultUnidades: 1, placeholder: '1' },
+  bdj: { nome: 'Bandeja (bdj)', sigla: 'bdj', grupo: 'embalagem', defaultUnidades: 6, placeholder: 'Ex: 6' },
+  kg: { nome: 'Quilograma (kg)', sigla: 'kg', grupo: 'peso' },
+  g: { nome: 'Grama (g)', sigla: 'g', grupo: 'peso' },
+  l: { nome: 'Litro (l)', sigla: 'l', grupo: 'volume' },
+  ml: { nome: 'Mililitro (ml)', sigla: 'ml', grupo: 'volume' },
+};
+
 interface InsumosViewProps {
   insumos: Insumo[];
   onRefresh: () => void;
@@ -27,6 +55,7 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
   const [formData, setFormData] = useState({
     nome: '',
     unidade: 'un' as UnidadeMedida,
+    unidadesPorEmbalagem: 1,
     custoUnitario: 0,
     estoqueAtual: 0,
     estoqueMinimo: 5,
@@ -56,6 +85,7 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
     setFormData({
       nome: '',
       unidade: 'un',
+      unidadesPorEmbalagem: 1,
       custoUnitario: 0,
       estoqueAtual: 0,
       estoqueMinimo: 5,
@@ -67,9 +97,14 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
 
   const handleOpenEdit = (ins: Insumo) => {
     setEditingInsumo(ins);
+    const unPorEmb =
+      ins.unidadesPorEmbalagem && ins.unidadesPorEmbalagem > 0
+        ? ins.unidadesPorEmbalagem
+        : UNIDADES_CONFIG[ins.unidade]?.defaultUnidades || 1;
     setFormData({
       nome: ins.nome,
       unidade: ins.unidade,
+      unidadesPorEmbalagem: unPorEmb,
       custoUnitario: ins.custoUnitario,
       estoqueAtual: ins.estoqueAtual,
       estoqueMinimo: ins.estoqueMinimo,
@@ -77,6 +112,16 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
     });
     setErrorMsg('');
     setModalOpen(true);
+  };
+
+  const handleUnidadeChange = (novaUnidade: UnidadeMedida) => {
+    const config = UNIDADES_CONFIG[novaUnidade];
+    const defaultQtd = config?.defaultUnidades ?? 1;
+    setFormData((prev) => ({
+      ...prev,
+      unidade: novaUnidade,
+      unidadesPorEmbalagem: defaultQtd,
+    }));
   };
 
   const handleSaveInsumo = async (e: React.FormEvent) => {
@@ -177,6 +222,13 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
       <div className="space-y-3 pb-16">
         {filteredInsumos.map((ins) => {
           const isCritico = ins.estoqueAtual <= ins.estoqueMinimo;
+          const unPorEmb =
+            ins.unidadesPorEmbalagem && ins.unidadesPorEmbalagem > 0
+              ? ins.unidadesPorEmbalagem
+              : UNIDADES_CONFIG[ins.unidade]?.defaultUnidades || 1;
+          const isEmbalagem = unPorEmb > 1;
+          const custoAvulso = isEmbalagem ? ins.custoUnitario / unPorEmb : null;
+          const estoqueAvulso = isEmbalagem ? Math.round(ins.estoqueAtual * unPorEmb * 100) / 100 : null;
 
           return (
             <div
@@ -188,16 +240,31 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-bold text-white text-sm">{ins.nome}</h3>
-                  <span className="text-[11px] text-zinc-500 block">
-                    Custo: <strong className="text-zinc-300 font-mono">R$ {ins.custoUnitario.toFixed(2)}</strong> / {ins.unidade}
+                  <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    Custo: <strong className="text-zinc-200 font-mono">R$ {ins.custoUnitario.toFixed(2)}</strong> / {ins.unidade}
+                    {custoAvulso !== null && (
+                      <span className="text-emerald-400 font-mono text-[10px] ml-1.5 font-bold">
+                        (R$ {custoAvulso.toFixed(2)}/un)
+                      </span>
+                    )}
                   </span>
+                  {isEmbalagem && (
+                    <span className="text-[10px] text-zinc-500 block font-mono">
+                      Embalagem com {unPorEmb} un
+                    </span>
+                  )}
                 </div>
 
                 <div className="text-right font-mono">
                   <span className={`text-sm font-black block ${isCritico ? 'text-amber-400' : 'text-emerald-400'}`}>
                     {ins.estoqueAtual} {ins.unidade}
                   </span>
-                  <span className="text-[10px] text-zinc-500">Mín: {ins.estoqueMinimo}</span>
+                  {estoqueAvulso !== null && (
+                    <span className="text-[10px] font-normal text-zinc-400 block">
+                      ({estoqueAvulso} un)
+                    </span>
+                  )}
+                  <span className="text-[10px] text-zinc-500">Mín: {ins.estoqueMinimo} {ins.unidade}</span>
                 </div>
               </div>
 
@@ -269,19 +336,38 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
                   <label className="block text-[11px] font-bold text-zinc-400 mb-1">Unidade</label>
                   <select
                     value={formData.unidade}
-                    onChange={(e) => setFormData({ ...formData, unidade: e.target.value as UnidadeMedida })}
-                    className="w-full text-xs p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none"
+                    onChange={(e) => handleUnidadeChange(e.target.value as UnidadeMedida)}
+                    className="w-full text-xs p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="un">un (Unidade)</option>
-                    <option value="kg">kg (Quilograma)</option>
-                    <option value="g">g (Grama)</option>
-                    <option value="l">l (Litro)</option>
-                    <option value="ml">ml (Mililitro)</option>
+                    <optgroup label="Embalagens & Contáveis">
+                      <option value="un">un (Unidade Avulsa)</option>
+                      <option value="dz">dz (Dúzia - 12 un)</option>
+                      <option value="cx">cx (Caixa)</option>
+                      <option value="pct">pct (Pacote)</option>
+                      <option value="fd">fd (Fardo)</option>
+                      <option value="crt">crt (Cartela)</option>
+                      <option value="lt">lt (Lata)</option>
+                      <option value="pt">pt (Pote)</option>
+                      <option value="gf">gf (Garrafa)</option>
+                      <option value="br">br (Barra)</option>
+                      <option value="cp">cp (Copo)</option>
+                      <option value="bdj">bdj (Bandeja)</option>
+                    </optgroup>
+                    <optgroup label="Peso & Massa">
+                      <option value="kg">kg (Quilograma)</option>
+                      <option value="g">g (Grama)</option>
+                    </optgroup>
+                    <optgroup label="Volume & Líquidos">
+                      <option value="l">l (Litro)</option>
+                      <option value="ml">ml (Mililitro)</option>
+                    </optgroup>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-zinc-400 mb-1">Custo Unitário (R$)</label>
+                  <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                    Custo por {formData.unidade} (R$)
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -289,10 +375,47 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
                     required
                     value={formData.custoUnitario}
                     onChange={(e) => setFormData({ ...formData, custoUnitario: parseFloat(e.target.value) || 0 })}
-                    className="w-full text-xs p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-emerald-400 font-mono font-bold focus:outline-none"
+                    className="w-full text-xs p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               </div>
+
+              {UNIDADES_CONFIG[formData.unidade]?.grupo === 'embalagem' && formData.unidade !== 'un' && (
+                <div className="p-3 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-1.5">
+                  <label className="block text-[11px] font-bold text-zinc-300">
+                    Qtd de Itens por Embalagem ({formData.unidade}) *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                      value={formData.unidadesPorEmbalagem || 1}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          unidadesPorEmbalagem: Math.max(1, parseInt(e.target.value) || 1),
+                        })
+                      }
+                      className="w-full text-xs p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                      placeholder={UNIDADES_CONFIG[formData.unidade]?.placeholder || '1'}
+                    />
+                    <span className="absolute right-3 top-2.5 text-[10px] text-zinc-500">
+                      un / {formData.unidade}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400">
+                    {formData.custoUnitario > 0 && formData.unidadesPorEmbalagem > 0 ? (
+                      <>
+                        Equivale a <strong className="text-emerald-400 font-mono">R$ {(formData.custoUnitario / formData.unidadesPorEmbalagem).toFixed(2)}</strong> por unidade avulsa (un).
+                      </>
+                    ) : (
+                      'Permite calcular o custo e baixar o estoque por unidade individual na receita.'
+                    )}
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -348,16 +471,32 @@ export default function InsumosView({ insumos, onRefresh }: InsumosViewProps) {
             <h3 className="font-bold text-white text-sm">Entrada de {insumoEntrada.nome}</h3>
             <form onSubmit={handleSalvarEntradaEstoque} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">Qtd Comprada ({insumoEntrada.unidade})</label>
+                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                  Qtd Comprada ({insumoEntrada.unidade})
+                </label>
                 <input
                   type="number"
-                  step="0.1"
-                  min="0.1"
+                  step="0.01"
+                  min="0.01"
                   required
                   value={quantidadeEntrada}
                   onChange={(e) => setQuantidadeEntrada(parseFloat(e.target.value) || 0)}
                   className="w-full text-base font-bold p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-emerald-400 font-mono text-center"
                 />
+                {(() => {
+                  const unPorEmb =
+                    insumoEntrada.unidadesPorEmbalagem && insumoEntrada.unidadesPorEmbalagem > 0
+                      ? insumoEntrada.unidadesPorEmbalagem
+                      : UNIDADES_CONFIG[insumoEntrada.unidade]?.defaultUnidades || 1;
+                  if (unPorEmb > 1 && quantidadeEntrada > 0) {
+                    return (
+                      <p className="text-[11px] text-emerald-400 bg-emerald-500/10 p-2 rounded-xl text-center font-mono mt-2">
+                        Equivale a <strong>{(quantidadeEntrada * unPorEmb).toLocaleString('pt-BR')}</strong> unidades avulsas (un).
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               <div className="flex gap-2">

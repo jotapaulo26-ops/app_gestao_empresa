@@ -5,13 +5,30 @@ export interface Categoria {
   cor?: string;
 }
 
-export type UnidadeMedida = 'kg' | 'g' | 'l' | 'ml' | 'un';
+export type UnidadeMedida =
+  | 'kg'
+  | 'g'
+  | 'l'
+  | 'ml'
+  | 'un'
+  | 'dz'
+  | 'cx'
+  | 'pct'
+  | 'fd'
+  | 'crt'
+  | 'lt'
+  | 'pt'
+  | 'gf'
+  | 'br'
+  | 'cp'
+  | 'bdj';
 
 export interface Insumo {
   id: string;
   nome: string;
   unidade: UnidadeMedida;
-  custoUnitario: number; // Custo por unidade padrão (ex: por kg, por g, por litro, por un)
+  unidadesPorEmbalagem?: number; // Qtd de unidades individuais contidas na embalagem (ex: 12 na dúzia, 24 na caixa)
+  custoUnitario: number; // Custo por unidade padrão ou embalagem cadastrada
   estoqueAtual: number;
   estoqueMinimo: number;
   fornecedor?: string;
@@ -100,12 +117,14 @@ export interface Pedido {
   statusProducao?: StatusProducao;
 }
 
+export type FormaPagamentoCrediario = 'DINHEIRO' | 'PIX' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'CARTAO';
+
 export interface PagamentoCrediario {
   id: string;
   clienteId: string;
   valor: number;
   dataPagamento: string;
-  formaPagamento: 'DINHEIRO' | 'PIX' | 'CARTAO';
+  formaPagamento: FormaPagamentoCrediario;
   observacao?: string;
 }
 
@@ -122,6 +141,27 @@ export interface ConfiguracaoLoja {
   tipoChavePix: TipoChavePix;
   titularPix: string;
   cidadePix?: string;
+  configGas?: ConfiguracaoGas;
+  tarifaKwh?: number;
+  maquinasEletricas?: MaquinaEletrica[];
+}
+
+export interface MaquinaEletrica {
+  id: string;
+  nome: string;
+  potenciaWatts: number;
+  tempoUsoPadraoMinutos?: number;
+  horasUsoDiario?: number;
+  voltagem?: number;
+  amperagem?: number;
+  icone?: string;
+  observacoes?: string;
+}
+
+export interface ConfiguracaoGas {
+  nome: string;
+  pesoKg: number;
+  preco: number;
 }
 
 export interface Usuario {

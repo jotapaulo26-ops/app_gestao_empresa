@@ -10,12 +10,29 @@ interface CategoriasViewProps {
   categorias: Categoria[];
   produtos: Produto[];
   onRefresh: () => void;
+  categoriasComEstoqueBaixo?: string[];
+  blinkTrigger?: number;
 }
 
-export default function CategoriasView({ categorias, produtos, onRefresh }: CategoriasViewProps) {
+export default function CategoriasView({
+  categorias,
+  produtos,
+  onRefresh,
+  categoriasComEstoqueBaixo = [],
+  blinkTrigger = 0,
+}: CategoriasViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const [nome, setNome] = useState('');
+  const [isBlinking, setIsBlinking] = useState(false);
+
+  React.useEffect(() => {
+    if (blinkTrigger && blinkTrigger > 0) {
+      setIsBlinking(true);
+      const timer = setTimeout(() => setIsBlinking(false), 2100);
+      return () => clearTimeout(timer);
+    }
+  }, [blinkTrigger]);
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
@@ -105,18 +122,31 @@ export default function CategoriasView({ categorias, produtos, onRefresh }: Cate
       <div className="space-y-3 pb-16">
         {(categorias || []).map((cat) => {
           const countProd = (produtos || []).filter((p) => p && p.categoriaId === cat.id).length;
+          const hasEstoqueBaixo = (categoriasComEstoqueBaixo || []).includes(cat.id);
+          const devePiscar = hasEstoqueBaixo && isBlinking;
 
           return (
             <div
-              key={cat.id}
-              className="p-4 rounded-3xl bg-zinc-950 border border-zinc-800/80 hover:border-cyan-500/40 transition-all flex items-center justify-between"
+              key={`${cat.id}-${blinkTrigger || 0}`}
+              className={`p-4 rounded-3xl bg-zinc-950 border transition-all flex items-center justify-between relative ${
+                devePiscar
+                  ? 'piscar-tres-vezes border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.5)]'
+                  : 'border-zinc-800/80 hover:border-cyan-500/40'
+              }`}
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
                   <Tags className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="font-bold text-white text-sm block">{cat.nome}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-sm block">{cat.nome}</span>
+                    {hasEstoqueBaixo && (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-[9px] font-bold text-rose-400 uppercase tracking-wider animate-pulse">
+                        Estoque Baixo
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] text-zinc-400 font-mono">
                     {countProd} {countProd === 1 ? 'produto vinculado' : 'produtos vinculados'}
                   </span>

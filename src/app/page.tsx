@@ -13,8 +13,10 @@ import InsumosView from '@/components/InsumosView';
 import CategoriasView from '@/components/CategoriasView';
 import LojaConfigView from '@/components/LojaConfigView';
 import LojaSeletorModal from '@/components/LojaSeletorModal';
+import CalculadoraGasView from '@/components/CalculadoraGasView';
+import CalculadoraEletricaView from '@/components/CalculadoraEletricaView';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
+import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja, PagamentoCrediario } from '@/types';
 import { obterItensLocais, salvarItensLocais, obterFilaSincronizacao, limparTodosOsDadosLocais } from '@/lib/indexedDb';
 import { calcularDashboardMetrics } from '@/lib/dashboardMetrics';
 
@@ -63,6 +65,7 @@ export default function HomePage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [pagamentosCrediario, setPagamentosCrediario] = useState<PagamentoCrediario[]>([]);
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(null);
   const [configLoja, setConfigLoja] = useState<ConfiguracaoLoja | null>(() => {
     if (typeof window !== 'undefined') {
@@ -91,20 +94,23 @@ export default function HomePage() {
     let localProd: Produto[] = [];
     let localCli: Cliente[] = [];
     let localPed: Pedido[] = [];
+    let localPags: PagamentoCrediario[] = [];
 
     try {
-      [localCat, localIns, localProd, localCli, localPed] = await Promise.all([
+      [localCat, localIns, localProd, localCli, localPed, localPags] = await Promise.all([
         obterItensLocais<Categoria>('categorias'),
         obterItensLocais<Insumo>('insumos'),
         obterItensLocais<Produto>('produtos'),
         obterItensLocais<Cliente>('clientes'),
         obterItensLocais<Pedido>('pedidos'),
+        obterItensLocais<PagamentoCrediario>('pagamentosCrediario'),
       ]);
 
       if (Array.isArray(localCat)) setCategorias(localCat);
       if (Array.isArray(localIns)) setInsumos(localIns);
       if (Array.isArray(localProd)) setProdutos(localProd);
       if (Array.isArray(localCli)) setClientes(localCli);
+      if (Array.isArray(localPags)) setPagamentosCrediario(localPags);
       if (Array.isArray(localPed)) {
         const pedValidos = localPed
           .filter((p) => p && p.status !== 'CANCELADO')
@@ -146,24 +152,24 @@ export default function HomePage() {
       ]);
       clearTimeout(timeoutId);
 
-      // Atualiza estado e IndexedDB apenas se o servidor respondeu com dados válidos
-      if (Array.isArray(resCat) && resCat.length > 0) {
+      // 100% LOCAL PRIMACY: Apenas inicializa (seed) coleções que estiverem totalmente vazias localmente
+      if (Array.isArray(resCat) && resCat.length > 0 && localCat.length === 0) {
         setCategorias(resCat);
         salvarItensLocais('categorias', resCat);
       }
-      if (Array.isArray(resIns) && resIns.length > 0) {
+      if (Array.isArray(resIns) && resIns.length > 0 && localIns.length === 0) {
         setInsumos(resIns);
         salvarItensLocais('insumos', resIns);
       }
-      if (Array.isArray(resProd) && resProd.length > 0) {
+      if (Array.isArray(resProd) && resProd.length > 0 && localProd.length === 0) {
         setProdutos(resProd);
         salvarItensLocais('produtos', resProd);
       }
-      if (Array.isArray(resCli) && resCli.length > 0) {
+      if (Array.isArray(resCli) && resCli.length > 0 && localCli.length === 0) {
         setClientes(resCli);
         salvarItensLocais('clientes', resCli);
       }
-      if (Array.isArray(resPed) && resPed.length > 0) {
+      if (Array.isArray(resPed) && resPed.length > 0 && localPed.length === 0) {
         const pedFiltrados = resPed
           .filter((p) => p && p.status !== 'CANCELADO')
           .sort((a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime());
@@ -243,12 +249,34 @@ export default function HomePage() {
 
   // Métricas do Dashboard calculadas 100% em TEMPO REAL (Chamada incondicional de Hook no topo)
   const realTimeDashboardMetrics = useMemo(() => {
-    return calcularDashboardMetrics(pedidos, produtos, clientes, insumos);
-  }, [pedidos, produtos, clientes, insumos]);
+    return calcularDashboardMetrics(pedidos, produtos, clientes, insumos, pagamentosCrediario);
+  }, [pedidos, produtos, clientes, insumos, pagamentosCrediario]);
 
   const totalAlertasEstoque =
     (realTimeDashboardMetrics?.insumosBaixos?.length || 0) +
     (realTimeDashboardMetrics?.produtosBaixos?.length || 0);
+
+  // Identifica categorias que possuem produtos com estoque baixo
+  const categoriasComEstoqueBaixoIds = useMemo(() => {
+    const catsSet = new Set<string>();
+    (produtos || []).forEach((prod) => {
+      if (!prod) return;
+      const estAtual = Number(prod.estoqueAtual) || 0;
+      const estMin = Number(prod.estoqueMinimo) || 0;
+      if (estAtual <= estMin && prod.categoriaId) {
+        catsSet.add(prod.categoriaId);
+      }
+    });
+    return Array.from(catsSet);
+  }, [produtos]);
+
+  const [blinkCategoriasTrigger, setBlinkCategoriasTrigger] = useState<number>(0);
+
+  // Ao clicar no ícone de alerta de estoque, navega para o PDV e faz a categoria piscar 3 vezes
+  const handleAlertaEstoqueClick = useCallback(() => {
+    handleSelectTab('pdv');
+    setBlinkCategoriasTrigger(Date.now());
+  }, [handleSelectTab]);
 
   return (
     <div className="min-h-screen bg-black text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
@@ -257,6 +285,7 @@ export default function HomePage() {
         activeTab={activeTab}
         setActiveTab={handleSelectTab}
         alertasEstoque={totalAlertasEstoque}
+        onAlertaEstoqueClick={handleAlertaEstoqueClick}
         nomeLoja={configLoja?.nomeLoja || sessao.usuario.nomeLoja || 'Minha Loja'}
         nomeUsuario={sessao.usuario.nome || 'Administrador'}
       />
@@ -278,6 +307,8 @@ export default function HomePage() {
                     produtos={produtos}
                     clientes={clientes}
                     config={configLoja || undefined}
+                    categoriasComEstoqueBaixo={categoriasComEstoqueBaixoIds}
+                    blinkTrigger={blinkCategoriasTrigger}
                     onOrderCompleted={async () => {
                       await loadAllData();
                     }}
@@ -381,7 +412,39 @@ export default function HomePage() {
                   <CategoriasView
                     categorias={categorias}
                     produtos={produtos}
+                    categoriasComEstoqueBaixo={categoriasComEstoqueBaixoIds}
+                    blinkTrigger={blinkCategoriasTrigger}
                     onRefresh={() => loadAllData()}
+                  />
+                </ErrorBoundary>
+              </div>
+            )}
+
+            {/* Nova Aba: Calculadora de Gás */}
+            {visitedTabs.has('calculadora-gas') && (
+              <div style={{ display: activeTab === 'calculadora-gas' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Calculadora de Gás">
+                  <CalculadoraGasView
+                    produtos={produtos}
+                    config={configLoja || undefined}
+                    onRefresh={() => loadAllData()}
+                    onConfigUpdated={(novaConfig) => setConfigLoja(novaConfig)}
+                    onNavigateToReceitas={() => handleSelectTab('receitas')}
+                  />
+                </ErrorBoundary>
+              </div>
+            )}
+
+            {/* Nova Aba: Calculadora Elétrica & Máquinas */}
+            {visitedTabs.has('calculadora-eletrica') && (
+              <div style={{ display: activeTab === 'calculadora-eletrica' ? 'block' : 'none' }}>
+                <ErrorBoundary fallbackTitle="Calculadora Elétrica & Máquinas">
+                  <CalculadoraEletricaView
+                    produtos={produtos}
+                    config={configLoja || undefined}
+                    onRefresh={() => loadAllData()}
+                    onConfigUpdated={(novaConfig) => setConfigLoja(novaConfig)}
+                    onNavigateToReceitas={() => handleSelectTab('receitas')}
                   />
                 </ErrorBoundary>
               </div>

@@ -47,6 +47,8 @@ interface PDVViewProps {
   clientes: Cliente[];
   config?: ConfiguracaoLoja;
   onOrderCompleted: (novoPedido?: Pedido) => void;
+  categoriasComEstoqueBaixo?: string[];
+  blinkTrigger?: number;
 }
 
 export default function PDVView({
@@ -55,12 +57,28 @@ export default function PDVView({
   clientes,
   config,
   onOrderCompleted,
+  categoriasComEstoqueBaixo = [],
+  blinkTrigger = 0,
 }: PDVViewProps) {
   // Navegação do PDV:
   // selectedCategoriaId: null -> Exibe o Portal Inicial de Categorias Ocultas
   // selectedCategoriaId: 'all' ou 'cat-id' -> Exibe apenas a tela dos produtos daquela categoria!
   const [selectedCategoriaId, setSelectedCategoriaId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isBlinking, setIsBlinking] = useState<boolean>(false);
+
+  // Efeito para piscar as categorias com estoque baixo 3 vezes ao clicar no ícone de alerta
+  React.useEffect(() => {
+    if (blinkTrigger && blinkTrigger > 0) {
+      setSelectedCategoriaId(null);
+      setIsCheckoutOpen(false);
+      setIsBlinking(true);
+      const timer = setTimeout(() => {
+        setIsBlinking(false);
+      }, 2100);
+      return () => clearTimeout(timer);
+    }
+  }, [blinkTrigger]);
   
   // Controle de Tela Separada de Checkout
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
@@ -734,15 +752,26 @@ export default function PDVView({
           {(categorias || []).map((cat, idx) => {
             const theme = getCategoryTheme(cat?.nome || '', idx);
             const qtd = (produtos || []).filter((p) => p && p.categoriaId === cat.id).length;
+            const hasEstoqueBaixo = (categoriasComEstoqueBaixo || []).includes(cat.id);
+            const devePiscar = hasEstoqueBaixo && isBlinking;
 
             return (
               <button
-                key={cat.id}
+                key={`${cat.id}-${blinkTrigger || 0}`}
                 onClick={() => setSelectedCategoriaId(cat.id)}
-                className={`p-5 bg-zinc-950 rounded-3xl border ${theme.border} transition-all text-left flex flex-col justify-between h-36 group active:scale-95`}
+                className={`p-5 bg-zinc-950 rounded-3xl border ${theme.border} transition-all text-left flex flex-col justify-between h-36 group active:scale-95 relative ${
+                  devePiscar ? 'piscar-tres-vezes ring-2 ring-rose-500' : ''
+                }`}
               >
-                <div className={`w-10 h-10 rounded-2xl border ${theme.iconBg} flex items-center justify-center transition-all`}>
-                  <Sparkles className="w-5 h-5" />
+                <div className="flex items-center justify-between w-full">
+                  <div className={`w-10 h-10 rounded-2xl border ${theme.iconBg} flex items-center justify-center transition-all`}>
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  {hasEstoqueBaixo && (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/50 text-[9px] font-black text-rose-400 uppercase tracking-wider animate-pulse">
+                      Estoque Baixo
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className={`text-sm font-black ${theme.text} line-clamp-1 block transition-colors`}>

@@ -1,4 +1,4 @@
-import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja } from '@/types';
+import { Categoria, Insumo, Produto, Cliente, Pedido, ConfiguracaoLoja, PagamentoCrediario } from '@/types';
 import {
   salvarItemLocal,
   removerItemLocal,
@@ -83,6 +83,10 @@ export async function produzirLoteLocalEOnline(produtoId: string, quantidadeLote
           else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
           else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
           else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+          else if (ft.unidadeUso === 'un' && insumo.unidade !== 'un') {
+            const unPorEmb = insumo.unidadesPorEmbalagem || (insumo.unidade === 'dz' ? 12 : insumo.unidade === 'crt' ? 30 : 1);
+            fator = unPorEmb > 1 ? 1 / unPorEmb : 1;
+          }
         }
         const necessario = (ft.quantidade * fator) * numLotes;
         if (Number(insumo.estoqueAtual || 0) < necessario) {
@@ -104,6 +108,10 @@ export async function produzirLoteLocalEOnline(produtoId: string, quantidadeLote
           else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
           else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
           else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+          else if (ft.unidadeUso === 'un' && insumo.unidade !== 'un') {
+            const unPorEmb = insumo.unidadesPorEmbalagem || (insumo.unidade === 'dz' ? 12 : insumo.unidade === 'crt' ? 30 : 1);
+            fator = unPorEmb > 1 ? 1 / unPorEmb : 1;
+          }
         }
         const consumo = (ft.quantidade * fator) * numLotes;
         insumo.estoqueAtual = Number(Math.max(0, (Number(insumo.estoqueAtual) || 0) - consumo).toFixed(3));
@@ -271,7 +279,17 @@ export async function amortizarCrediarioLocalEOnline(body: {
   formaPagamento: string;
   observacoes?: string;
   observacao?: string;
-}): Promise<void> {
+}): Promise<PagamentoCrediario> {
+  const agora = new Date().toISOString();
+  const novoPagamento: PagamentoCrediario = {
+    id: `pag-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    clienteId: body.clienteId,
+    valor: Number(body.valor) || 0,
+    formaPagamento: (body.formaPagamento as any) || 'PIX',
+    dataPagamento: agora,
+    observacao: body.observacao || body.observacoes || '',
+  };
+
   try {
     const clientesLocais = await obterItensLocais<Cliente>('clientes');
     const cli = clientesLocais.find((c) => c.id === body.clienteId);
@@ -279,8 +297,11 @@ export async function amortizarCrediarioLocalEOnline(body: {
       cli.saldoDevedor = Math.max(0, Number(((Number(cli.saldoDevedor) || 0) - Number(body.valor)).toFixed(2)));
       await salvarItemLocal('clientes', cli);
     }
+
+    // Salva o comprovante/histórico do pagamento no IndexedDB local
+    await salvarItemLocal('pagamentosCrediario', novoPagamento);
   } catch (err) {
-    console.warn('Erro ao atualizar saldo do cliente localmente:', err);
+    console.warn('Erro ao atualizar saldo ou salvar pagamento localmente:', err);
   }
 
   if (typeof window !== 'undefined' && navigator.onLine) {
@@ -291,6 +312,24 @@ export async function amortizarCrediarioLocalEOnline(body: {
         body: JSON.stringify(body),
       }).catch(() => {});
     } catch {}
+  }
+
+  return novoPagamento;
+}
+
+export async function obterPagamentosCrediarioLocais(clienteId?: string): Promise<PagamentoCrediario[]> {
+  try {
+    const pags = await obterItensLocais<PagamentoCrediario>('pagamentosCrediario');
+    if (!Array.isArray(pags)) return [];
+    const ordenados = [...pags].sort(
+      (a, b) => new Date(b.dataPagamento).getTime() - new Date(a.dataPagamento).getTime()
+    );
+    if (clienteId) {
+      return ordenados.filter((p) => p && p.clienteId === clienteId);
+    }
+    return ordenados;
+  } catch {
+    return [];
   }
 }
 

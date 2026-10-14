@@ -107,8 +107,10 @@ export default function ReceitasView({
   };
 
   // Unidades com conversão automática inteligente
-  const getOpcoesUnidade = (insumoUnidade?: string) => {
-    const u = (insumoUnidade || 'un').toLowerCase();
+  const getOpcoesUnidade = (insumoUnidade?: string, insumoObj?: Insumo) => {
+    const ins = insumoObj || insumos.find((i) => i.unidade === insumoUnidade);
+    const u = (insumoUnidade || ins?.unidade || 'un').toLowerCase();
+
     if (u === 'kg' || u === 'g') {
       return [
         { label: 'g (gramas)', valor: 'g', fator: u === 'kg' ? 0.001 : 1 },
@@ -121,7 +123,32 @@ export default function ReceitasView({
         { label: 'l (litros)', valor: 'l', fator: u === 'l' ? 1 : 1000 },
       ];
     }
-    return [{ label: 'un (unidade)', valor: 'un', fator: 1 }];
+
+    const unPorEmb =
+      ins?.unidadesPorEmbalagem && ins.unidadesPorEmbalagem > 0
+        ? ins.unidadesPorEmbalagem
+        : u === 'dz'
+        ? 12
+        : u === 'crt'
+        ? 30
+        : 1;
+
+    if (unPorEmb > 1) {
+      return [
+        {
+          label: `un (avulsa - 1/${unPorEmb} de ${u})`,
+          valor: 'un',
+          fator: 1 / unPorEmb,
+        },
+        {
+          label: `${u} (embalagem inteira)`,
+          valor: u,
+          fator: 1,
+        },
+      ];
+    }
+
+    return [{ label: `${u} (${ins?.nome || 'unidade'})`, valor: u, fator: 1 }];
   };
 
   // Filtra apenas produtos que são FABRICADOS ou que têm ficha técnica
@@ -292,7 +319,7 @@ export default function ReceitasView({
       return;
     }
     const primeiro = insumos[0];
-    const opcoes = getOpcoesUnidade(primeiro.unidade);
+    const opcoes = getOpcoesUnidade(primeiro.unidade, primeiro);
     setFichaTecnica((prev) => [
       ...prev,
       {
@@ -314,7 +341,7 @@ export default function ReceitasView({
     setFichaTecnica((prev) => {
       const copy = [...prev];
       const insumo = insumos.find((i) => i.id === insumoId);
-      const opcoes = getOpcoesUnidade(insumo?.unidade);
+      const opcoes = getOpcoesUnidade(insumo?.unidade, insumo);
       const unit = unidadeUso || copy[index]?.unidadeUso || opcoes[0]?.valor || 'un';
       const fator =
         fatorConversao !== undefined
@@ -1278,7 +1305,7 @@ export default function ReceitasView({
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin">
                     {fichaTecnica.map((item, idx) => {
                       const insumo = insumos.find((i) => i.id === item.insumoId);
-                      const opcoes = getOpcoesUnidade(insumo?.unidade);
+                      const opcoes = getOpcoesUnidade(insumo?.unidade, insumo);
                       const custoItem =
                         parsePtBrFloat(item.quantidade) *
                         (item.fatorConversao || 1) *

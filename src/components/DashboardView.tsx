@@ -40,6 +40,8 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
 
   const totalHoje = Number(metrics.totalHoje || 0);
   const quantidadeVendasHoje = Number(metrics.quantidadeVendasHoje || 0);
+  const totalRecebidoCrediarioHoje = Number(metrics.totalRecebidoCrediarioHoje || 0);
+  const totalRecebidoCrediarioGeral = Number(metrics.totalRecebidoCrediarioGeral || 0);
   const faturamentoGeral = Number(metrics.faturamentoGeral || 0);
   const lucroGeral = Number(metrics.lucroGeral || 0);
   const margemGeralPct = Number(metrics.margemGeralPct || 0);
@@ -71,13 +73,21 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
 
         <div className="flex items-end justify-between">
           <div>
-            <span className="text-xs text-zinc-400 block">Faturamento Hoje</span>
+            <span className="text-xs text-zinc-400 block">Total Recebido Hoje (Caixa)</span>
             <span className="text-3xl font-black text-cyan-300 drop-shadow-[0_0_12px_rgba(0,240,255,0.5)] font-mono">
               R$ {totalHoje.toFixed(2)}
             </span>
-            <span className="text-[11px] text-zinc-400 mt-0.5 block">
-              {quantidadeVendasHoje} vendas realizadas hoje
-            </span>
+            <div className="flex flex-col gap-0.5 mt-1 text-[11px] font-mono">
+              <span className="text-zinc-400">
+                {quantidadeVendasHoje} {quantidadeVendasHoje === 1 ? 'venda realizada' : 'vendas realizadas'} hoje
+              </span>
+              {totalRecebidoCrediarioHoje > 0 && (
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3 text-emerald-400" />
+                  + R$ {totalRecebidoCrediarioHoje.toFixed(2)} de crediário recebido hoje
+                </span>
+              )}
+            </div>
           </div>
 
           <button
@@ -108,9 +118,14 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
           <span className="text-3xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(255,153,0,0.5)] font-mono">
             R$ {totalCrediarioRealAcumulado.toFixed(2)}
           </span>
-          <span className="text-[11px] text-zinc-400 mt-0.5 block">
-            Capital ativo pendente de quitação na praça
-          </span>
+          <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
+            <span>Capital pendente na praça</span>
+            {totalRecebidoCrediarioGeral > 0 && (
+              <span className="text-emerald-400 font-mono font-bold">
+                Já recebido: R$ {totalRecebidoCrediarioGeral.toFixed(2)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -197,11 +212,16 @@ export default function DashboardView({ metrics, setActiveTab }: DashboardViewPr
           <div className="p-3 bg-purple-950/40 rounded-2xl border border-purple-500/40 text-xs flex items-center justify-between animate-in fade-in">
             <div>
               <span className="text-[10px] text-purple-300 font-bold uppercase block">
-                Detalhes de {selectedDia.diaSemana} ({selectedDia.data})
+                Entradas em {selectedDia.diaSemana} ({selectedDia.data})
               </span>
-              <strong className="text-white text-sm font-mono">
+              <strong className="text-white text-sm font-mono block">
                 R$ {Number(selectedDia.faturamento || 0).toFixed(2)}
               </strong>
+              {(Number(selectedDia.crediarioRecebido || 0) > 0 || Number(selectedDia.vendasAVista || 0) > 0) && (
+                <span className="text-[10px] text-zinc-400 font-mono block mt-0.5">
+                  Vendas: R$ {Number(selectedDia.vendasAVista || 0).toFixed(2)} • Crediário: R$ {Number(selectedDia.crediarioRecebido || 0).toFixed(2)}
+                </span>
+              )}
             </div>
             <span className="text-xs px-2.5 py-1 rounded-xl bg-purple-500/20 text-purple-300 font-mono font-bold border border-purple-500/30">
               {Number(selectedDia.pedidos || 0)} {Number(selectedDia.pedidos || 0) === 1 ? 'pedido' : 'pedidos'}

@@ -1,5 +1,322 @@
 {
   "usuarios": [],
   "sessoes": [],
-  "lojas": {}
+  "lojas": {
+    "LOJA-1791604878478-40": {
+      "id": "LOJA-1791604878478-40",
+      "nomeLoja": "LOJA-1791604878478-40",
+      "criadoEm": "2026-10-12T04:10:10.322Z",
+      "categorias": [
+        {
+          "id": "cat-geral",
+          "nome": "Geral"
+        }
+      ],
+      "insumos": [],
+      "produtos": [],
+      "clientes": [],
+      "pedidos": [],
+      "pagamentosCrediario": [],
+      "configuracaoLoja": {
+        "nomeLoja": "LOJA-1791604878478-40",
+        "chavePix": "",
+        "tipoChavePix": "CELULAR",
+        "titularPix": "",
+        "cidadePix": "",
+        "mensagemRodape": "Agradecemos a sua preferência! Volte sempre."
+      }
+    },
+    "JOAO-DOCES": {
+      "id": "JOAO-DOCES",
+      "nomeLoja": "joao-doces",
+      "criadoEm": "2026-10-14T02:50:08.583Z",
+      "categorias": [
+        {
+          "id": "cat-geral",
+          "nome": "Geral"
+        }
+      ],
+      "insumos": [
+        {
+          "id": "ins-1791953418620-226",
+          "nome": "ovo",
+          "unidade": "dz",
+          "custoUnitario": 14.99,
+          "estoqueAtual": 3,
+          "estoqueMinimo": 1,
+          "fornecedor": ""
+        },
+        {
+          "id": "ins-1791953437527-484",
+          "nome": "leite",
+          "unidade": "l",
+          "custoUnitario": 6.49,
+          "estoqueAtual": 3,
+          "estoqueMinimo": 1,
+          "fornecedor": ""
+        },
+        {
+          "id": "ins-1791953463105-565",
+          "nome": "farinha",
+          "unidade": "kg",
+          "custoUnitario": 3.89,
+          "estoqueAtual": 2,
+          "estoqueMinimo": 0,
+          "fornecedor": ""
+        }
+      ],
+      "produtos": [
+        {
+          "id": "prod-1791950177623-912",
+          "nome": "brigadeiro",
+          "categoriaId": "cat-geral",
+          "tipo": "REVENDA",
+          "descricao": "",
+          "precoVenda": 5,
+          "custoTotal": 2.29,
+          "custoInsumos": 2.29,
+          "custoUnitarioInsumos": 2.29,
+          "custoEmbalagem": 0,
+          "custoMaoDeObra": 0,
+          "custoGasEnergia": 0,
+          "rendimentoReceita": 1,
+          "margemLucroPct": 100,
+          "estoqueAtual": 4,
+          "estoqueMinimo": 2,
+          "fichaTecnica": [],
+          "modoPreparo": "",
+          "tempoPreparo": "",
+          "validadeConservacao": ""
+        },
+        {
+          "id": "prod-1791950205962-583",
+          "nome": "ninho",
+          "categoriaId": "cat-geral",
+          "tipo": "REVENDA",
+          "descricao": "",
+          "precoVenda": 5,
+          "custoTotal": 2.19,
+          "custoInsumos": 2.19,
+          "custoUnitarioInsumos": 2.19,
+          "custoEmbalagem": 0,
+          "custoMaoDeObra": 0,
+          "custoGasEnergia": 0,
+          "rendimentoReceita": 1,
+          "margemLucroPct": 100,
+          "estoqueAtual": 6,
+          "estoqueMinimo": 2,
+          "fichaTecnica": [],
+          "modoPreparo": "",
+          "tempoPreparo": "",
+          "validadeConservacao": ""
+        },
+        {
+          "id": "prod-1791953581885-42",
+          "nome": "coxinha",
+          "categoriaId": "cat-geral",
+          "tipo": "FABRICADO",
+          "descricao": "",
+          "precoVenda": 6,
+          "custoTotal": 1.04,
+          "custoInsumos": 3.26,
+          "custoUnitarioInsumos": 0.27,
+          "custoEmbalagem": 0.56,
+          "custoMaoDeObra": 0.89,
+          "custoGasEnergia": 1.61,
+          "rendimentoReceita": 12,
+          "margemLucroPct": 100,
+          "estoqueAtual": 0,
+          "estoqueMinimo": 2,
+          "fichaTecnica": [
+            {
+              "insumoId": "ins-1791953418620-226",
+              "quantidade": 1,
+              "unidadeUso": "un",
+              "fatorConversao": 0.08333333333333333
+            },
+            {
+              "insumoId": "ins-1791953437527-484",
+              "quantidade": 100,
+              "unidadeUso": "ml",
+              "fatorConversao": 0.001
+            },
+            {
+              "insumoId": "ins-1791953463105-565",
+              "quantidade": 350,
+              "unidadeUso": "g",
+              "fatorConversao": 0.001
+            }
+          ],
+          "modoPreparo": "",
+          "tempoPreparo": "2 horas",
+          "validadeConservacao": "3 meses congelada"
+        }
+      ],
+      "clientes": [
+        {
+          "id": "cli-1791950217769-161",
+          "nome": "JOAO PAULO JANCANTI",
+          "telefone": "16993177138",
+          "cpf": "",
+          "endereco": "1284",
+          "limiteCredito": 250,
+          "saldoDevedor": 0,
+          "criadoEm": "2026-10-14T03:56:57.769Z"
+        }
+      ],
+      "pedidos": [
+        {
+          "clienteId": "cli-1791950217769-161",
+          "telefoneClienteAvulso": "16993177138",
+          "itens": [
+            {
+              "produtoId": "prod-1791950177623-912",
+              "nomeProduto": "brigadeiro",
+              "quantidade": 2,
+              "precoUnitario": 5,
+              "subtotal": 10,
+              "custoUnitario": 2.29
+            },
+            {
+              "produtoId": "prod-1791950205962-583",
+              "nomeProduto": "ninho",
+              "quantidade": 2,
+              "precoUnitario": 5,
+              "subtotal": 10,
+              "custoUnitario": 2.19
+            }
+          ],
+          "totalBruto": 20,
+          "desconto": 0,
+          "totalLiquido": 20,
+          "custoTotal": 8.96,
+          "lucroTotal": 11.04,
+          "formaPagamento": "CREDIARIO",
+          "observacoes": "",
+          "isEncomenda": false,
+          "id": "ped-1791950272987-168",
+          "codigo": 453,
+          "dataVenda": "2026-10-14T03:57:52.987Z",
+          "status": "CONCLUIDO"
+        },
+        {
+          "clienteId": "cli-1791950217769-161",
+          "telefoneClienteAvulso": "16993177138",
+          "itens": [
+            {
+              "produtoId": "prod-1791950205962-583",
+              "nomeProduto": "ninho",
+              "quantidade": 2,
+              "precoUnitario": 5,
+              "subtotal": 10,
+              "custoUnitario": 2.19
+            }
+          ],
+          "totalBruto": 10,
+          "desconto": 0,
+          "totalLiquido": 10,
+          "custoTotal": 4.38,
+          "lucroTotal": 5.62,
+          "formaPagamento": "CREDIARIO",
+          "observacoes": "",
+          "isEncomenda": false,
+          "id": "ped-1791950260183-882",
+          "codigo": 109,
+          "dataVenda": "2026-10-14T03:57:40.183Z",
+          "status": "CONCLUIDO"
+        },
+        {
+          "clienteId": "cli-1791950217769-161",
+          "telefoneClienteAvulso": "16993177138",
+          "itens": [
+            {
+              "produtoId": "prod-1791950177623-912",
+              "nomeProduto": "brigadeiro",
+              "quantidade": 6,
+              "precoUnitario": 5,
+              "subtotal": 30,
+              "custoUnitario": 2.29
+            }
+          ],
+          "totalBruto": 30,
+          "desconto": 0,
+          "totalLiquido": 30,
+          "custoTotal": 13.74,
+          "lucroTotal": 16.259999999999998,
+          "formaPagamento": "CREDIARIO",
+          "observacoes": "",
+          "isEncomenda": false,
+          "id": "ped-1791950244667-941",
+          "codigo": 920,
+          "dataVenda": "2026-10-14T03:57:24.667Z",
+          "status": "CONCLUIDO"
+        }
+      ],
+      "pagamentosCrediario": [
+        {
+          "id": "pag-1791950521658",
+          "clienteId": "cli-1791950217769-161",
+          "valor": 20,
+          "formaPagamento": "PIX",
+          "dataPagamento": "2026-10-14T04:02:01.658Z",
+          "observacao": "Amortização de saldo no crediário"
+        },
+        {
+          "id": "pag-1791952135883",
+          "clienteId": "cli-1791950217769-161",
+          "valor": 15,
+          "formaPagamento": "PIX",
+          "dataPagamento": "2026-10-14T04:28:55.883Z",
+          "observacao": "Amortização de saldo no crediário"
+        },
+        {
+          "id": "pag-1791952166923",
+          "clienteId": "cli-1791950217769-161",
+          "valor": 5,
+          "formaPagamento": "PIX",
+          "dataPagamento": "2026-10-14T04:29:26.923Z",
+          "observacao": "Amortização de saldo no crediário"
+        },
+        {
+          "id": "pag-1791953165184",
+          "clienteId": "cli-1791950217769-161",
+          "valor": 5,
+          "formaPagamento": "CARTAO_CREDITO",
+          "dataPagamento": "2026-10-14T04:46:05.184Z",
+          "observacao": "Amortização de saldo no crediário"
+        },
+        {
+          "id": "pag-1791953194425",
+          "clienteId": "cli-1791950217769-161",
+          "valor": 15,
+          "formaPagamento": "CARTAO_DEBITO",
+          "dataPagamento": "2026-10-14T04:46:34.425Z",
+          "observacao": "Amortização de saldo no crediário"
+        }
+      ],
+      "configuracaoLoja": {
+        "nomeLoja": "joao-doces",
+        "chavePix": "",
+        "tipoChavePix": "CELULAR",
+        "titularPix": "",
+        "cidadePix": "",
+        "mensagemRodape": "Agradecemos a sua preferência! Volte sempre.",
+        "configGas": {
+          "nome": "Botijão GLP P-13",
+          "pesoKg": 45,
+          "preco": 120
+        },
+        "tarifaKwh": 0.95,
+        "maquinasEletricas": [
+          {
+            "id": "maq_1791950420535_y8zke",
+            "nome": "Batedeira Planetária",
+            "potenciaWatts": 500,
+            "tempoUsoPadraoMinutos": 15,
+            "horasUsoDiario": 2
+          }
+        ]
+      }
+    }
+  }
 }

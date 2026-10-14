@@ -13,7 +13,7 @@ export interface SyncTask {
 }
 
 const DB_NAME = 'ErpPdvManuLocalDB';
-const DB_VERSION = 2; // Versão 2 para garantir criação de todas as objectStores
+const DB_VERSION = 3; // Versão 3 com pagamentosCrediario
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -30,7 +30,16 @@ export function openLocalDB(): Promise<IDBDatabase> {
 
       request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
         const db = (event.target as IDBOpenDBRequest).result;
-        const stores = ['produtos', 'categorias', 'insumos', 'clientes', 'pedidos', 'configuracoes', 'syncQueue'];
+        const stores = [
+          'produtos',
+          'categorias',
+          'insumos',
+          'clientes',
+          'pedidos',
+          'configuracoes',
+          'syncQueue',
+          'pagamentosCrediario',
+        ];
 
         for (const st of stores) {
           if (!db.objectStoreNames.contains(st)) {
@@ -293,7 +302,7 @@ export async function limparTodosOsDadosLocais(): Promise<void> {
   try {
     if (typeof window === 'undefined' || !window.indexedDB) return;
     const db = await openLocalDB();
-    const stores = ['produtos', 'categorias', 'insumos', 'clientes', 'pedidos', 'configuracoes'];
+    const stores = ['produtos', 'categorias', 'insumos', 'clientes', 'pedidos', 'configuracoes', 'pagamentosCrediario'];
     for (const st of stores) {
       if (db.objectStoreNames.contains(st)) {
         const tx = db.transaction(st, 'readwrite');
@@ -318,20 +327,31 @@ export async function exportarBackupCompleto(): Promise<{
   produtos: any[];
   clientes: any[];
   pedidos: any[];
+  pagamentosCrediario: any[];
+  localSettings?: Record<string, string | null>;
 }> {
-  const [configuracoes, categorias, insumos, produtos, clientes, pedidos] = await Promise.all([
+  const [configuracoes, categorias, insumos, produtos, clientes, pedidos, pagamentosCrediario] = await Promise.all([
     obterItensLocais('configuracoes'),
     obterItensLocais('categorias'),
     obterItensLocais('insumos'),
     obterItensLocais('produtos'),
     obterItensLocais('clientes'),
     obterItensLocais('pedidos'),
+    obterItensLocais('pagamentosCrediario'),
   ]);
 
   const lojaId = typeof window !== 'undefined' ? (localStorage.getItem('erp_usuario_loja_id') || 'LOJA-LOCAL') : 'LOJA-LOCAL';
 
+  const localSettings: Record<string, string | null> = {};
+  if (typeof window !== 'undefined') {
+    localSettings['erp_loja_config'] = localStorage.getItem('erp_loja_config');
+    localSettings['calc_gas_presets'] = localStorage.getItem('calc_gas_presets');
+    localSettings['calc_eletrica_maquinas'] = localStorage.getItem('calc_eletrica_maquinas');
+    localSettings['calc_eletrica_tarifa_kwh'] = localStorage.getItem('calc_eletrica_tarifa_kwh');
+  }
+
   return {
-    versao: '2.0-offline',
+    versao: '3.0-offline',
     dataExportacao: new Date().toISOString(),
     lojaId,
     configuracoes,
@@ -340,6 +360,8 @@ export async function exportarBackupCompleto(): Promise<{
     produtos,
     clientes,
     pedidos,
+    pagamentosCrediario,
+    localSettings,
   };
 }
 
@@ -370,6 +392,9 @@ export async function importarBackupCompleto(backup: any): Promise<boolean> {
   if (Array.isArray(backup.pedidos) && backup.pedidos.length > 0) {
     await salvarItensLocais('pedidos', backup.pedidos);
   }
+  if (Array.isArray(backup.pagamentosCrediario) && backup.pagamentosCrediario.length > 0) {
+    await salvarItensLocais('pagamentosCrediario', backup.pagamentosCrediario);
+  }
   if (Array.isArray(backup.configuracoes) && backup.configuracoes.length > 0) {
     await salvarItensLocais('configuracoes', backup.configuracoes);
     const cfg = backup.configuracoes.find((c: any) => c.id === 'loja-config') || backup.configuracoes[0];
@@ -377,6 +402,14 @@ export async function importarBackupCompleto(backup: any): Promise<boolean> {
       try {
         localStorage.setItem('erp_loja_config', JSON.stringify(cfg));
       } catch {}
+    }
+  }
+
+  if (backup.localSettings && typeof window !== 'undefined') {
+    for (const [key, val] of Object.entries(backup.localSettings)) {
+      if (val !== null && typeof val === 'string') {
+        localStorage.setItem(key, val);
+      }
     }
   }
 

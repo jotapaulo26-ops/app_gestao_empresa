@@ -819,6 +819,10 @@ export function produzirLoteProduto(
         else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
         else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
         else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+        else if (ft.unidadeUso === 'un' && insumo.unidade !== 'un') {
+          const unPorEmb = insumo.unidadesPorEmbalagem || (insumo.unidade === 'dz' ? 12 : insumo.unidade === 'crt' ? 30 : 1);
+          fator = unPorEmb > 1 ? 1 / unPorEmb : 1;
+        }
       }
       const necessario = (ft.quantidade * fator) * numLotes;
       if (insumo.estoqueAtual < necessario) {
@@ -840,6 +844,10 @@ export function produzirLoteProduto(
         else if (insumo.unidade === 'g' && ft.unidadeUso === 'kg') fator = 1000;
         else if (insumo.unidade === 'l' && ft.unidadeUso === 'ml') fator = 0.001;
         else if (insumo.unidade === 'ml' && ft.unidadeUso === 'l') fator = 1000;
+        else if (ft.unidadeUso === 'un' && insumo.unidade !== 'un') {
+          const unPorEmb = insumo.unidadesPorEmbalagem || (insumo.unidade === 'dz' ? 12 : insumo.unidade === 'crt' ? 30 : 1);
+          fator = unPorEmb > 1 ? 1 / unPorEmb : 1;
+        }
       }
       const consumo = (ft.quantidade * fator) * numLotes;
       insumo.estoqueAtual = Number(Math.max(0, insumo.estoqueAtual - consumo).toFixed(3));

@@ -1,24 +1,50 @@
-import { Pedido, Produto, Cliente, Insumo } from '@/types';
+import { Pedido, Produto, Cliente, Insumo, PagamentoCrediario } from '@/types';
 
 export function calcularDashboardMetrics(
   pedidos: Pedido[] = [],
   produtos: Produto[] = [],
   clientes: Cliente[] = [],
-  insumos: Insumo[] = []
+  insumos: Insumo[] = [],
+  pagamentosCrediario: PagamentoCrediario[] = []
 ) {
   const safePedidos = Array.isArray(pedidos) ? pedidos : [];
   const safeProdutos = Array.isArray(produtos) ? produtos : [];
   const safeClientes = Array.isArray(clientes) ? clientes : [];
   const safeInsumos = Array.isArray(insumos) ? insumos : [];
+  const safePagamentos = Array.isArray(pagamentosCrediario) ? pagamentosCrediario : [];
 
   const pedidosConcluidos = safePedidos.filter((p) => p && p.status === 'CONCLUIDO');
 
   const hoje = new Date().toISOString().slice(0, 10);
   const vendasHoje = pedidosConcluidos.filter((p) => p.dataVenda && p.dataVenda.slice(0, 10) === hoje);
+  const pagamentosHoje = safePagamentos.filter((p) => p.dataPagamento && p.dataPagamento.slice(0, 10) === hoje);
 
-  const totalHoje = Number(vendasHoje.reduce((acc, p) => acc + (Number(p.totalLiquido) || 0), 0).toFixed(2));
+  // Vendas à vista de hoje (excluindo o que foi vendido fiado no dia)
+  const vendasAVistaHoje = vendasHoje
+    .filter((p) => p.formaPagamento !== 'CREDIARIO')
+    .reduce((acc, p) => acc + (Number(p.totalLiquido) || 0), 0);
+
+  // Pagamentos de crediário recebidos hoje
+  const totalRecebidoCrediarioHoje = Number(
+    pagamentosHoje.reduce((acc, p) => acc + (Number(p.valor) || 0), 0).toFixed(2)
+  );
+
+  // Total Real de Entradas em Caixa Hoje (Vendas à vista + Pagamentos de Fiado)
+  const totalHoje = Number((vendasAVistaHoje + totalRecebidoCrediarioHoje).toFixed(2));
+
+  // Vendas totais faturadas hoje (inclui o fiado novo)
+  const faturamentoHoje = Number(
+    vendasHoje.reduce((acc, p) => acc + (Number(p.totalLiquido) || 0), 0).toFixed(2)
+  );
+
+  // Faturamento e lucro geral de produtos
   const faturamentoGeral = Number(pedidosConcluidos.reduce((acc, p) => acc + (Number(p.totalLiquido) || 0), 0).toFixed(2));
   const lucroGeral = Number(pedidosConcluidos.reduce((acc, p) => acc + (Number(p.lucroTotal) || 0), 0).toFixed(2));
+
+  // Pagamentos de crediário históricos totais
+  const totalRecebidoCrediarioGeral = Number(
+    safePagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0).toFixed(2)
+  );
 
   const totalCrediarioRealAcumulado = Number(
     safeClientes.reduce((acc, c) => acc + (Number(c.saldoDevedor) || 0), 0).toFixed(2)
@@ -117,7 +143,14 @@ export function calcularDashboardMetrics(
       saldoDevedor: Number(c.saldoDevedor.toFixed(2)),
     }));
 
-  const ultimos7Dias: { data: string; diaSemana: string; faturamento: number; pedidos: number }[] = [];
+  const ultimos7Dias: {
+    data: string;
+    diaSemana: string;
+    faturamento: number;
+    pedidos: number;
+    vendasAVista: number;
+    crediarioRecebido: number;
+  }[] = [];
   const diasSemanaNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   for (let i = 6; i >= 0; i--) {
@@ -128,13 +161,22 @@ export function calcularDashboardMetrics(
     const diaSemana = diasSemanaNomes[d.getDay()];
 
     const vendasDoDia = pedidosConcluidos.filter((p) => p.dataVenda && p.dataVenda.slice(0, 10) === dataIso);
-    const fatDoDia = vendasDoDia.reduce((acc, p) => acc + (Number(p.totalLiquido) || 0), 0);
+    const pagamentosDoDia = safePagamentos.filter((p) => p.dataPagamento && p.dataPagamento.slice(0, 10) === dataIso);
+
+    const vendasAVista = vendasDoDia
+      .filter((p) => p.formaPagamento !== 'CREDIARIO')
+      .reduce((acc, p) => acc + (Number(p.totalLiquido) || 0), 0);
+    const crediarioRecebido = pagamentosDoDia.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+
+    const totalEntradasDia = Number((vendasAVista + crediarioRecebido).toFixed(2));
 
     ultimos7Dias.push({
       data: diaFormatado,
       diaSemana,
-      faturamento: Number(fatDoDia.toFixed(2)),
+      faturamento: totalEntradasDia,
       pedidos: vendasDoDia.length,
+      vendasAVista: Number(vendasAVista.toFixed(2)),
+      crediarioRecebido: Number(crediarioRecebido.toFixed(2)),
     });
   }
 
@@ -146,6 +188,7 @@ export function calcularDashboardMetrics(
     CREDIARIO: 0,
   };
 
+  // Vendas faturadas
   for (const ped of pedidosConcluidos) {
     const forma = ped.formaPagamento || 'DINHEIRO';
     if (totalFormas[forma] !== undefined) {
@@ -155,14 +198,37 @@ export function calcularDashboardMetrics(
     }
   }
 
+  // Contabiliza recebimentos de crediário nas formas reais em que o cliente pagou
+  for (const pag of safePagamentos) {
+    const forma = (pag.formaPagamento || 'PIX').toUpperCase();
+    const val = Number(pag.valor) || 0;
+    if (forma.includes('PIX')) {
+      totalFormas['PIX'] = (totalFormas['PIX'] || 0) + val;
+    } else if (forma.includes('DINHEIRO')) {
+      totalFormas['DINHEIRO'] = (totalFormas['DINHEIRO'] || 0) + val;
+    } else if (forma.includes('DEBITO') || forma.includes('DÉBITO')) {
+      totalFormas['CARTAO_DEBITO'] = (totalFormas['CARTAO_DEBITO'] || 0) + val;
+    } else if (forma.includes('CREDITO') || forma.includes('CRÉDITO') || forma.includes('CARTAO')) {
+      totalFormas['CARTAO_CREDITO'] = (totalFormas['CARTAO_CREDITO'] || 0) + val;
+    } else {
+      totalFormas['PIX'] = (totalFormas['PIX'] || 0) + val;
+    }
+  }
+
+  const totalEntradasGerais = Object.values(totalFormas).reduce((a, b) => a + b, 0);
+
   const distribuicaoPagamento = Object.entries(totalFormas).map(([forma, valor]) => ({
     forma,
     valor: Number(valor.toFixed(2)),
-    porcentagem: faturamentoGeral > 0 ? Number(((valor / faturamentoGeral) * 100).toFixed(1)) : 0,
+    porcentagem: totalEntradasGerais > 0 ? Number(((valor / totalEntradasGerais) * 100).toFixed(1)) : 0,
   }));
 
   return {
-    totalHoje,
+    totalHoje, // Entradas totais reais no caixa hoje (vendas à vista + recebimentos de fiado)
+    faturamentoHoje,
+    vendasAVistaHoje: Number(vendasAVistaHoje.toFixed(2)),
+    totalRecebidoCrediarioHoje,
+    totalRecebidoCrediarioGeral,
     quantidadeVendasHoje: vendasHoje.length,
     faturamentoGeral,
     lucroGeral,

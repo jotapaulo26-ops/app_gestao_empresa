@@ -71,6 +71,56 @@ export default function LojaConfigView({ config, lojaId, onRefresh, onConfigUpda
 
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [backupLoading, setBackupLoading] = useState(false);
+
+  const handleExportBackup = async () => {
+    try {
+      setBackupLoading(true);
+      setErrorMsg('');
+      const backup = await exportarBackupCompleto();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dataStr = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `backup-erp-manu-local-${dataStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSuccessMsg('Backup exportado com sucesso! Salve o arquivo em local seguro.');
+    } catch (err: any) {
+      setErrorMsg('Erro ao gerar backup: ' + (err.message || 'Falha local'));
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm('Deseja restaurar este backup? Todos os dados atuais deste aparelho serão substituídos pelo conteúdo do arquivo.')) {
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      setBackupLoading(true);
+      setErrorMsg('');
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      await importarBackupCompleto(parsed);
+      setSuccessMsg('Backup restaurado com sucesso no aparelho!');
+      onRefresh();
+    } catch (err: any) {
+      setErrorMsg('Erro ao restaurar backup: ' + (err.message || 'Arquivo inválido'));
+    } finally {
+      setBackupLoading(false);
+      e.target.value = '';
+    }
+  };
+
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleSave = async (e: React.FormEvent) => {
@@ -383,6 +433,46 @@ export default function LojaConfigView({ config, lojaId, onRefresh, onConfigUpda
                 <span className="text-[9px] text-zinc-500">Favorecido: {formData.titularPix}</span>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Bloco: Armazenamento 100% Local & Backup */}
+        <div className="bg-zinc-950 p-4 rounded-3xl border border-cyan-500/40 shadow-neon-cyan space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+              <HardDrive className="w-4 h-4" /> Armazenamento 100% Local (IndexedDB)
+            </h3>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              Offline-First
+            </span>
+          </div>
+
+          <p className="text-[11px] text-zinc-400">
+            Todos os seus dados (produtos, vendas, receitas, insumos, clientes e pagamentos) ficam salvos diretamente na memória deste aparelho.
+          </p>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              disabled={backupLoading}
+              onClick={handleExportBackup}
+              className="py-2.5 px-3 bg-zinc-900 hover:bg-cyan-500 hover:text-black border border-cyan-500/40 text-cyan-300 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+            >
+              <Download className="w-4 h-4" />
+              <span>{backupLoading ? 'Gerando...' : 'Exportar Backup'}</span>
+            </button>
+
+            <label className="py-2.5 px-3 bg-zinc-900 hover:bg-purple-500 hover:text-white border border-purple-500/40 text-purple-300 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-[0_0_10px_rgba(168,85,247,0.2)] cursor-pointer text-center">
+              <Upload className="w-4 h-4" />
+              <span>Restaurar Backup</span>
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                disabled={backupLoading}
+                onChange={handleImportBackup}
+              />
+            </label>
           </div>
         </div>
 

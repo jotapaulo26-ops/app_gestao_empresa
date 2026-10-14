@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Pedido, Cliente, ConfiguracaoLoja } from '@/types';
+import React, { useState, useEffect } from 'react';
+import { Pedido, Cliente, ConfiguracaoLoja, PagamentoCrediario } from '@/types';
 import { Receipt, Search, Printer, Ban, X, AlertTriangle, FileText, QrCode } from 'lucide-react';
 import CobrancaPdfModal from './CobrancaPdfModal';
 import { apiFetch } from '@/lib/api';
-import { cancelarPedidoLocalEOnline } from '@/lib/dataService';
+import { cancelarPedidoLocalEOnline, obterPagamentosCrediarioLocais } from '@/lib/dataService';
 
 interface PedidosViewProps {
   pedidos: Pedido[];
@@ -20,6 +20,13 @@ export default function PedidosView({ pedidos, clientes, config, onRefresh }: Pe
 
   // Modal Cobrança PDF
   const [cobrancaModalPedido, setCobrancaModalPedido] = useState<Pedido | null>(null);
+  const [pagamentos, setPagamentos] = useState<PagamentoCrediario[]>([]);
+
+  useEffect(() => {
+    obterPagamentosCrediarioLocais()
+      .then((pags) => setPagamentos(pags))
+      .catch(() => {});
+  }, []);
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [pedidoParaCancelar, setPedidoParaCancelar] = useState<Pedido | null>(null);
@@ -177,6 +184,11 @@ export default function PedidosView({ pedidos, clientes, config, onRefresh }: Pe
           config={config}
           cliente={getClienteDoPedido(cobrancaModalPedido)}
           pedido={cobrancaModalPedido}
+          pagamentosDoCliente={
+            cobrancaModalPedido.clienteId
+              ? pagamentos.filter((p) => p.clienteId === cobrancaModalPedido.clienteId)
+              : []
+          }
           valorTotal={cobrancaModalPedido.totalLiquido}
           titulo={`Cobrança do Pedido #${cobrancaModalPedido.codigo}`}
         />

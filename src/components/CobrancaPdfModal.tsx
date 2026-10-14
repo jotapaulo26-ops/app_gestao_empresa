@@ -1,17 +1,19 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ConfiguracaoLoja, Cliente, Pedido } from '@/types';
+import { ConfiguracaoLoja, Cliente, Pedido, PagamentoCrediario } from '@/types';
 import { gerarPixCopiaECola } from '@/lib/pix';
 import {
   X,
   Printer,
   Copy,
   Check,
+  CheckCircle2,
   Share2,
   FileText,
   QrCode,
   Building2,
+  Coins,
 } from 'lucide-react';
 
 interface CobrancaPdfModalProps {
@@ -21,6 +23,7 @@ interface CobrancaPdfModalProps {
   cliente?: Cliente;
   pedido?: Pedido; // Se for cobrança de um pedido individual
   pedidosDoCliente?: Pedido[]; // Se for extrato consolidado de todas as compras do cliente
+  pagamentosDoCliente?: PagamentoCrediario[]; // Pagamentos já realizados pelo cliente
   valorTotal: number;
   titulo?: string;
 }
@@ -32,11 +35,27 @@ export default function CobrancaPdfModal({
   cliente,
   pedido,
   pedidosDoCliente,
+  pagamentosDoCliente = [],
   valorTotal,
   titulo = 'Cobrança Detalhada de Compras',
 }: CobrancaPdfModalProps) {
   const [copiadoChave, setCopiadoChave] = useState(false);
   const [copiadoPayload, setCopiadoPayload] = useState(false);
+
+  // Totais contábeis
+  const totalPago = useMemo(() => {
+    return (pagamentosDoCliente || []).reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+  }, [pagamentosDoCliente]);
+
+  const totalCompras = useMemo(() => {
+    if (pedidosDoCliente && pedidosDoCliente.length > 0) {
+      return pedidosDoCliente.reduce((acc, p) => acc + (Number(p.totalLiquido) || 0), 0);
+    }
+    if (pedido) {
+      return Number(pedido.totalLiquido) || valorTotal;
+    }
+    return valorTotal + totalPago;
+  }, [pedidosDoCliente, pedido, valorTotal, totalPago]);
 
   // Gera o código Pix Copia e Cola
   const pixPayload = useMemo(() => {
@@ -69,8 +88,22 @@ export default function CobrancaPdfModal({
   const handleShareWhatsApp = () => {
     let msg = `*🧾 ${titulo.toUpperCase()}*\n`;
     msg += `*${config?.nomeLoja || 'LOJA'}*\n`;
-    msg += `Cliente: ${cliente?.nome || pedido?.nomeClienteAvulso || 'Cliente'}\n`;
-    msg += `*Valor Total:* R$ ${valorTotal.toFixed(2)}\n\n`;
+    msg += `Cliente: ${cliente?.nome || pedido?.nomeClienteAvulso || 'Cliente'}\n\n`;
+
+    if (pagamentosDoCliente && pagamentosDoCliente.length > 0) {
+      msg += `🛍️ *Total em Compras:* R$ ${totalCompras.toFixed(2)}\n`;
+      msg += `✅ *Total Pago/Abatido:* - R$ ${totalPago.toFixed(2)}\n`;
+      msg += `*💰 SALDO RESTANTE A PAGAR: R$ ${valorTotal.toFixed(2)}*\n\n`;
+
+      msg += `*Histórico de Pagamentos Recebidos:*\n`;
+      pagamentosDoCliente.forEach((pag) => {
+        const dt = new Date(pag.dataPagamento).toLocaleDateString('pt-BR');
+        msg += `• ${dt} - R$ ${Number(pag.valor).toFixed(2)} via ${pag.formaPagamento}${pag.observacao ? ` (${pag.observacao})` : ''}\n`;
+      });
+      msg += `\n`;
+    } else {
+      msg += `*Valor Total a Pagar:* R$ ${valorTotal.toFixed(2)}\n\n`;
+    }
 
     if (config?.chavePix) {
       msg += `*PAGUE COM PIX (${config.tipoChavePix}):*\n`;
@@ -197,12 +230,82 @@ export default function CobrancaPdfModal({
               </div>
             )}
 
-            {/* Totalizador da Cobrança */}
-            <div className="pt-3 border-t-2 border-zinc-800 flex justify-between items-center font-mono">
-              <span className="font-bold text-sm uppercase font-sans">Total da Cobrança:</span>
-              <span className="text-xl font-black text-zinc-950">
-                R$ {valorTotal.toFixed(2)}
-              </span>
+            {/* Seção de Pagamentos / Abatimentos Já Realizados */}
+            {pagamentosDoCliente && pagamentosDoCliente.length > 0 && (
+              <div className="space-y-2 pt-3 border-t border-zinc-200">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-emerald-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Pagamentos & Abatimentos Já Realizados ({pagamentosDoCliente.length})</span>
+                  </h4>
+                  <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Total Pago: R$ {totalPago.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 font-mono text-xs">
+                  {pagamentosDoCliente.map((pag) => (
+                    <div
+                      key={pag.id}
+                      className="p-2 bg-emerald-50/60 rounded-xl border border-emerald-200 flex justify-between items-center"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-sans font-bold text-zinc-900 text-[11px]">
+                            Pago via {pag.formaPagamento}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 font-mono">
+                            {new Date(pag.dataPagamento).toLocaleDateString('pt-BR')} às{' '}
+                            {new Date(pag.dataPagamento).toLocaleTimeString('pt-BR', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        {pag.observacao && (
+                          <span className="text-[10px] text-zinc-600 font-sans block italic mt-0.5">
+                            Obs: {pag.observacao}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-black text-emerald-700 font-mono text-xs">
+                        - R$ {Number(pag.valor).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Totalizador Contábil da Cobrança */}
+            <div className="pt-3 border-t-2 border-zinc-800 space-y-1.5 font-mono">
+              {pagamentosDoCliente && pagamentosDoCliente.length > 0 ? (
+                <>
+                  <div className="flex justify-between text-xs text-zinc-600 font-sans">
+                    <span>Total das Compras Realizadas:</span>
+                    <span className="font-mono font-bold text-zinc-900">R$ {totalCompras.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-emerald-700 font-sans">
+                    <span>(-) Total de Pagamentos Abatidos:</span>
+                    <span className="font-mono font-bold">- R$ {totalPago.toFixed(2)}</span>
+                  </div>
+                  <div className="pt-1.5 border-t border-zinc-200 flex justify-between items-center">
+                    <span className="font-black text-sm uppercase font-sans text-zinc-950">
+                      Saldo Restante a Pagar:
+                    </span>
+                    <span className="text-xl font-black text-zinc-950">
+                      R$ {valorTotal.toFixed(2)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-sm uppercase font-sans">Total da Cobrança:</span>
+                  <span className="text-xl font-black text-zinc-950">
+                    R$ {valorTotal.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

@@ -17,10 +17,24 @@ import {
   LogOut,
   ChefHat,
   CalendarClock,
+  Flame,
+  Zap,
 } from 'lucide-react';
 import InstallPwaButton from './InstallPwaButton';
 
-export type ActiveTab = 'dashboard' | 'pdv' | 'pedidos' | 'encomendas' | 'crediario' | 'produtos' | 'receitas' | 'insumos' | 'categorias' | 'loja';
+export type ActiveTab =
+  | 'dashboard'
+  | 'pdv'
+  | 'pedidos'
+  | 'encomendas'
+  | 'crediario'
+  | 'produtos'
+  | 'receitas'
+  | 'insumos'
+  | 'categorias'
+  | 'loja'
+  | 'calculadora-gas'
+  | 'calculadora-eletrica';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -29,6 +43,7 @@ interface NavbarProps {
   nomeLoja?: string;
   nomeUsuario?: string;
   onLogout?: () => void;
+  onAlertaEstoqueClick?: () => void;
 }
 
 export default function Navbar({
@@ -38,6 +53,7 @@ export default function Navbar({
   nomeLoja = 'MANU',
   nomeUsuario,
   onLogout,
+  onAlertaEstoqueClick,
 }: NavbarProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -53,6 +69,8 @@ export default function Navbar({
       case 'insumos': return 'Estoque de Insumos';
       case 'categorias': return 'Categorias';
       case 'loja': return 'Minha Loja & Dados da Nota';
+      case 'calculadora-gas': return 'Calculadora de Gás';
+      case 'calculadora-eletrica': return 'Calculadora Elétrica & Máquinas';
       default: return 'ERP & PDV';
     }
   };
@@ -82,10 +100,10 @@ export default function Navbar({
         </div>
 
         {/* NAVEGAÇÃO DESKTOP RÁPIDA (MD+) */}
-        <div className="hidden lg:flex items-center gap-1 bg-zinc-950/80 p-1 rounded-2xl border border-zinc-800/80">
+        <div className="hidden lg:flex items-center gap-1 bg-zinc-950/80 p-1 rounded-2xl border border-zinc-800/80 overflow-x-auto max-w-[70vw]">
           <button
             onClick={() => handleSelectTab('pdv')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'pdv' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-neon-green' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -94,7 +112,7 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('dashboard')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'dashboard' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -103,7 +121,7 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('crediario')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'crediario' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-neon-amber' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -112,7 +130,7 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('pedidos')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'pedidos' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 shadow-neon-pink' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -121,7 +139,7 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('encomendas')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'encomendas' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-neon-amber' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -130,7 +148,7 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('produtos')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'produtos' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-neon-purple' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -139,7 +157,7 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('receitas')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'receitas' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-neon-pink' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -148,7 +166,7 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('insumos')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'insumos' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-neon-amber' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -157,20 +175,51 @@ export default function Navbar({
           </button>
           <button
             onClick={() => handleSelectTab('categorias')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
               activeTab === 'categorias' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan' : 'text-zinc-400 hover:text-white'
             }`}
           >
             <Tags className="w-3.5 h-3.5" />
             <span>Categorias</span>
           </button>
+
+          {/* Menus Novos: Calculadora de Gás e Calculadora Elétrica */}
+          <button
+            onClick={() => handleSelectTab('calculadora-gas')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeTab === 'calculadora-gas'
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                : 'text-zinc-400 hover:text-amber-400'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-400" />
+            <span>Calc. Gás</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('calculadora-eletrica')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeTab === 'calculadora-eletrica'
+                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 shadow-[0_0_12px_rgba(234,179,8,0.3)]'
+                : 'text-zinc-400 hover:text-yellow-300'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-yellow-400" />
+            <span>Calc. Elétrica</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
           {alertasEstoque > 0 && (
             <button
-              onClick={() => handleSelectTab('insumos')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs font-bold animate-pulse"
+              onClick={() => {
+                if (onAlertaEstoqueClick) {
+                  onAlertaEstoqueClick();
+                } else {
+                  handleSelectTab('insumos');
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-xs font-bold animate-pulse hover:bg-amber-500/30 active:scale-95 transition-all cursor-pointer shadow-[0_0_10px_rgba(245,158,11,0.3)]"
+              title="Estoque baixo! Clique para localizar as categorias afetadas"
             >
               <Package className="w-3.5 h-3.5" />
               <span>{alertasEstoque}</span>
@@ -250,7 +299,7 @@ export default function Navbar({
           <button
             onClick={() => setDrawerOpen(true)}
             className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition-all ${
-              drawerOpen || ['encomendas', 'produtos', 'receitas', 'insumos', 'categorias', 'loja'].includes(activeTab)
+              drawerOpen || ['encomendas', 'produtos', 'receitas', 'insumos', 'categorias', 'loja', 'calculadora-gas', 'calculadora-eletrica'].includes(activeTab)
                 ? 'bg-purple-500/20 text-purple-300 border border-purple-500/80 shadow-neon-purple'
                 : 'text-zinc-500 hover:text-purple-400'
             }`}
@@ -287,6 +336,42 @@ export default function Navbar({
 
             {/* Grid de Módulos com Cores Neon Individuais */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* Calculadora de Gás - Neon Âmbar / Laranja */}
+              <button
+                onClick={() => handleSelectTab('calculadora-gas')}
+                className={`p-4 rounded-2xl border flex items-center gap-3 transition-all ${
+                  activeTab === 'calculadora-gas'
+                    ? 'bg-amber-500/10 border-amber-500 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-amber-500/40'
+                }`}
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <span className="text-xs font-bold block">Calc. de Gás</span>
+                  <span className="text-[10px] text-zinc-500">Botijão & Fogo</span>
+                </div>
+              </button>
+
+              {/* Calculadora Elétrica - Neon Amarelo */}
+              <button
+                onClick={() => handleSelectTab('calculadora-eletrica')}
+                className={`p-4 rounded-2xl border flex items-center gap-3 transition-all ${
+                  activeTab === 'calculadora-eletrica'
+                    ? 'bg-yellow-500/10 border-yellow-500 text-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.25)]'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-yellow-500/40'
+                }`}
+              >
+                <div className="w-10 h-10 rounded-xl bg-yellow-500/20 text-yellow-400 flex items-center justify-center">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <span className="text-xs font-bold block">Calc. Elétrica</span>
+                  <span className="text-[10px] text-zinc-500">Máquinas & kWh</span>
+                </div>
+              </button>
+
               {/* Encomendas & Agenda - Neon Âmbar */}
               <button
                 onClick={() => handleSelectTab('encomendas')}
